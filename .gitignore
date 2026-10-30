@@ -1,0 +1,20 @@
+# Arquivos de senhas e credenciais locais (como acesso ao banco de dados)
+senhas.txt
+.env
+
+# Arquivos de configurações de IDE pessoais
+.vscode/
+.idea/
+
+# Diretórios de envios de arquivos (como imagens de suspeitos e evidências)
+uploads/
+
+# Diretórios de testes locais
+testes/
+
+# Logs e registros de falhas gerados pelo sistema
+*.log
+erro?.log
+
+# Pastas de bibliotecas e dependências pesadas da plataforma web
+node_modules/
