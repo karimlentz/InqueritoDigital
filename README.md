@@ -88,3 +88,4 @@ Este projeto está organizado nas pastas descritas abaixo, visando a separação
 ## 6. EQUIPE DE DESENVOLVIMENTO:
 
 * **Karim Soares Lentz** 
+* **Rafaella Tavares Moreira** 
