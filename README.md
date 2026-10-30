@@ -38,7 +38,7 @@ Siga as instruções abaixo para preparar seu ambiente e atuar como um Desenvolv
 
 1. **Clonando o repositório:** Abra o terminal na pasta onde deseja salvar o projeto e aplique o comando:
 ```bash
-git clone <URL_DO_REPOSITORIO_AQUI>
+git clone https://github.com/karimlentz/InqueritoDigital
 ```
 *(Você também pode baixar o arquivo .zip do projeto e extraí-lo, caso prefira não usar a linha de comando no primeiro momento).*
 
@@ -88,3 +88,4 @@ Este projeto está organizado nas pastas descritas abaixo, visando a separação
 ## 6. EQUIPE DE DESENVOLVIMENTO:
 
 * **Karim Soares Lentz** 
+* **Rafaella Tavares Moreira** 
