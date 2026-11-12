@@ -28,21 +28,43 @@ O **Inquérito Digital** surge como uma plataforma centralizada para solucionar 
 5. **Acesso:** abra seu navegador (Chrome 120+ / Firefox 120+) e acesse `http://localhost:3000`. O sistema exibirá a tela de **Login**.
 6. **Login de demonstração:** e-mail `karim@pcmg.gov.br`, senha `123456` (outros investigadores pré-cadastrados: `julio@pcmg.gov.br` e `rafaella@pcmg.gov.br`, mesma senha).
 
+### 2.2 Desenvolvedor
+1. **Clonar o repositório:**
+   ```bash
+   git clone https://github.com/karimlentz/InqueritoDigital.git
+   ```
+   *(ou baixe o .zip e extraia, caso prefira não usar o terminal no primeiro momento)*
+2. **Instalar bibliotecas e dependências** (Node resolve via `package.json`):
+   ```bash
+   npm install
+   ```
+3. **Executar em desenvolvimento:** na pasta raiz, execute:
+   ```bash
+   npm run dev
+   ```
+   Em seguida, acesse `http://localhost:3000` no browser. Alterações no HTML/CSS/JS do front aparecem recarregando a página; alterações no backend reiniciam sozinhas (`node --watch`).
+4. **Testes:**
+   ```bash
+   npm test                # testes unitários (Jest) — validações, regras de negócio
+   npx cypress open        # testes de interface caixa preta (Cypress) — a aplicação precisa estar rodando
+   ```
+5. **Banco local:** `data/inquerito.db` (SQLite), criado com o schema do Dicionário de Dados (`config/schema.sql`) na primeira execução. Regras de Git: ver [PadroesAdotados/Regras_de_Uso_do_Git.md](PadroesAdotados/Regras_de_Uso_do_Git.md).
+
 ---
 
-## 4. TECNOLOGIAS
+## 3. TECNOLOGIAS
 
 As seguintes tecnologias, linguagens e ferramentas foram empregadas na construção deste software:
 
-* **Controle de Versão e Colaboração:** 
-* **Front-end (Interface):** 
-* **Back-end (Servidor):** 
-* **Banco de Dados:** 
-* **Qualidade e Testes:**
+* **Controle de Versão e Colaboração:Git, GitHub e GitKraken** 
+* **Front-end (Interface):HTML5, CSS3 e JavaScript** 
+* **Back-end (Servidor): Node.js 18 LTS (ou superior) com Express 4.x** 
+* **Banco de Dados:SQLite** 
+* **IDE : VSCode**
 
 ---
 
-## 5. ORGANIZAÇÃO DO PROJETO
+## 4. ORGANIZAÇÃO DO PROJETO
 
 Este projeto está organizado nas pastas descritas abaixo, visando a separação de responsabilidades (Clean Code) e facilitando a manutenção:
 
@@ -61,6 +83,8 @@ Este projeto está organizado nas pastas descritas abaixo, visando a separação
 
 ---
 
-## 6. EQUIPE DE DESENVOLVIMENTO:
+## 5. EQUIPE DE DESENVOLVIMENTO:
+
 * **Karim Soares Lentz**
 * **Rafaella Tavares Moreira**
+* **Júlio César Requena Fraga**
