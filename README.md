@@ -10,7 +10,7 @@ Este projeto foi desenvolvido como parte do projeto final da disciplina de **Eng
 
 No cenário das delegacias de investigação, o gerenciamento de inquéritos sofre com a fragmentação de informações. A "dor" principal dos investigadores é a dificuldade de conectar dados de campo isolados: o registro de um suspeito não se vincula automaticamente às evidências de um caso. Isso gera atrasos, perda de informações confidenciais e dificulta a gestão do caso.
 
-O **Inquérito Digital** surge como uma plataforma centralizada para solucionar essa fragmentação. O sistema propicia o controle restrito de acesso por login, o cadastro independente de fichas de **Suspeitos** e a abertura transacional de **Investigações** — uma operação que une em tempo real o investigador ativo, o suspeito principal e as evidências recolhidas na cena do crime, gerando um dossiê unificado.
+O **Inquérito Digital** surge como uma plataforma centralizada para solucionar essa fragmentação. O sistema propicia o controle restrito de acesso por login, o cadastro independente de fichas de **Suspeitos** e a abertura transacional de **Investigações** — uma operação que une em tempo real o investigador ativo, o suspeito principal e as evidências recolhidas na cena do crime, gerando um dossiê unificado. Cada investigador terá um mural indivídual para organizar as informações (suspeitos, evidências e comentários) da forma que achar necessário.
 
 ## 2. INSTRUÇÕES PARA USO
 
