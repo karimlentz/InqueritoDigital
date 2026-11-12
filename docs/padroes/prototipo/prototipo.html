@@ -1,0 +1,1169 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inquérito Digital - Protótipo Avançado</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&family=Inter:wght@300;400;600;700&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #1a1a1a;
+        }
+
+        /* --- VISÃO 1: MURAL --- */
+        .corkboard {
+            background-color: #a06b3e;
+            background-image: url('data:image/svg+xml,%3Csvg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noise"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100" height="100" filter="url(%23noise)" opacity="0.15"/%3E%3C/svg%3E');
+            box-shadow: inset 0 0 80px rgba(0,0,0,0.7);
+            height: 100vh;
+            width: 100vw;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Camadas de Desenho (Canvas e SVG) */
+        #svg-layer {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 5;
+        }
+        #draw-layer {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 6;
+            pointer-events: none;
+        }
+
+        /* Menu Flutuante (Toolbar) */
+        .tools-panel {
+            position: absolute;
+            left: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(30, 30, 30, 0.95);
+            border-radius: 12px;
+            padding: 15px 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 100;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.6);
+            border: 1px solid #444;
+        }
+        .tool-btn {
+            background: #444;
+            color: #ccc;
+            border: none;
+            width: 45px;
+            height: 45px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        .tool-btn:hover { background: #555; color: white; }
+        .tool-btn.active { 
+            background: #ef4444; 
+            color: white;
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.6);
+        }
+        /* Tooltip customizado */
+        .tool-btn::after {
+            content: attr(data-title);
+            position: absolute;
+            left: 60px;
+            background: black;
+            color: white;
+            font-size: 0.8rem;
+            padding: 5px 10px;
+            border-radius: 4px;
+            white-space: nowrap;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .tool-btn:hover::after { opacity: 1; }
+
+        /* Elementos Arrastáveis */
+        .draggable {
+            position: absolute;
+            cursor: grab;
+            transition: transform 0.1s;
+            z-index: 20;
+        }
+        .draggable:active { cursor: grabbing; transform: scale(1.02); }
+
+        /* Modo Apagar ativo */
+        .delete-mode .draggable { cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="red"><path d="M3 6v18h18v-18h-18zm5 14c0 .552-.448 1-1 1s-1-.448-1-1v-10c0-.552.448-1 1-1s1 .448 1 1v10zm5 0c0 .552-.448 1-1 1s-1-.448-1-1v-10c0-.552.448-1 1-1s1 .448 1 1v10zm5 0c0 .552-.448 1-1 1s-1-.448-1-1v-10c0-.552.448-1 1-1s1 .448 1 1v10zm4-18v2h-20v-2h5.711c.9 0 1.631-1.099 1.631-2h5.315c.901.73 2 1.631 2h5.712z"/></svg>') 12 12, pointer !important; }
+        .delete-mode .draggable:hover { opacity: 0.5; }
+
+        /* Modo Fio ativo */
+        .thread-mode .draggable { cursor: crosshair !important; border: 2px dashed rgba(239,68,68,0.5); }
+        .thread-mode .draggable:hover { border-color: red; }
+
+        /* Estilos dos Cards */
+        .polaroid {
+            background: #fff;
+            padding: 10px 10px 40px 10px;
+            box-shadow: 3px 4px 15px rgba(0,0,0,0.5);
+            width: 160px;
+            text-align: center;
+            font-family: 'Caveat', cursive;
+            font-size: 1.2rem;
+            color: #333;
+            transform: rotate(calc(-5deg + 10deg * var(--rand, 0.5)));
+        }
+        .polaroid img { width: 100%; height: 140px; object-fit: cover; border: 1px solid #ddd; }
+
+        .post-it {
+            background: #ffebb5;
+            padding: 15px;
+            width: 200px;
+            height: 200px;
+            box-shadow: 2px 4px 8px rgba(0,0,0,0.3);
+            font-family: 'Caveat', cursive;
+            font-size: 1.4rem;
+            color: #111;
+            transform: rotate(calc(-3deg + 6deg * var(--rand, 0.5)));
+            display: flex;
+            flex-direction: column;
+        }
+        /* Redimensionamento nativo para novos post-its */
+        .resizable {
+            resize: both;
+            overflow: hidden;
+            min-width: 120px;
+            min-height: 120px;
+        }
+
+        .pin {
+            width: 14px;
+            height: 14px;
+            background: radial-gradient(circle at 30% 30%, #ff4b4b, #990000);
+            border-radius: 50%;
+            position: absolute;
+            top: 5px;
+            left: 50%;
+            transform: translateX(-50%);
+            box-shadow: 2px 4px 4px rgba(0,0,0,0.4), inset -2px -2px 4px rgba(0,0,0,0.3);
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        /* Ícone Caixa Animada */
+        .box-icon-container {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 80px;
+            height: 80px;
+            cursor: pointer;
+            z-index: 100;
+        }
+        .box-back { position: absolute; bottom: 0; width: 100%; height: 60%; background: #8B4513; border-radius: 4px; box-shadow: 2px 2px 10px rgba(0,0,0,0.5); }
+        .box-folder { position: absolute; bottom: 10px; left: 10%; width: 80%; height: 50%; background: #ffd700; border-radius: 4px 4px 0 0; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); border-top: 2px solid #e6c200; box-shadow: 0 -2px 5px rgba(0,0,0,0.2); }
+        .box-front { position: absolute; bottom: 0; width: 100%; height: 40%; background: #A0522D; border-radius: 0 0 4px 4px; border-top: 1px solid rgba(0,0,0,0.3); z-index: 10; display: flex; align-items: center; justify-content: center; }
+        .box-label { width: 30px; height: 15px; background: #f4f4f4; border: 1px solid #333; }
+        .box-icon-container:hover .box-folder { bottom: 30px; height: 60%; background: #ffea70; }
+        .box-icon-container:hover { transform: scale(1.05); }
+
+        /* --- VISÃO 2: ARQUIVO --- */
+        .archive-drawer { background-color: #2c2c2c; height: 100vh; width: 100vw; display: flex; flex-direction: column; align-items: center; padding: 2rem; box-shadow: inset 0 0 100px rgba(0,0,0,0.9); }
+        .drawer-interior { width: 80%; max-width: 900px; flex-grow: 1; background: #1f1f1f; border: 10px solid #3d3d3d; border-top: none; border-radius: 0 0 10px 10px; padding: 20px 40px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; position: relative; box-shadow: inset 0 20px 20px -20px rgba(0,0,0,0.8); }
+        
+        .archive-folder { background: linear-gradient(to bottom, #f3c95c, #d4a938); border: 1px solid #b88d22; height: 60px; border-radius: 8px 8px 0 0; margin-top: -30px; position: relative; cursor: pointer; transition: transform 0.2s ease, margin 0.2s ease; box-shadow: 0 -4px 10px rgba(0,0,0,0.3); display: flex; align-items: flex-start; padding-left: 20px; padding-top: 10px; }
+        .archive-folder:first-child { margin-top: 20px; }
+        .archive-folder:hover { transform: translateY(-20px); margin-bottom: 20px; z-index: 50 !important; background: linear-gradient(to bottom, #ffe082, #f3c95c); }
+        
+        .folder-tab-top { background: #f3c95c; padding: 2px 15px; border-radius: 5px 5px 0 0; border: 1px solid #b88d22; border-bottom: none; font-weight: bold; font-size: 0.85rem; color: #554010; position: absolute; top: -22px; }
+        .folder-title-view { font-family: 'Inter', sans-serif; font-weight: bold; color: #332505; font-size: 1.1rem; opacity: 0.8; transition: opacity 0.2s; }
+        .archive-folder:hover .folder-title-view { opacity: 1; }
+
+        /* --- VISÃO 3: ARQUIVO ABERTO (CRUD) --- */
+        .desk-surface { background-color: #3b424d; height: 100vh; width: 100vw; display: flex; justify-content: center; align-items: center; position: relative; }
+        .open-folder { width: 90%; max-width: 1000px; height: 85vh; background: #f4d068; border-radius: 5px 15px 15px 5px; box-shadow: 20px 20px 30px rgba(0,0,0,0.4), inset -5px 0 20px rgba(0,0,0,0.1); display: flex; flex-direction: column; position: relative; background-image: url('data:image/svg+xml,%3Csvg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"%3E%3Cpath d="M0 0h40v40H0V0zm20 20h20v20H20V20zM0 20h20v20H0V20z" fill="%23d4a938" fill-opacity="0.05" fill-rule="evenodd"/%3E%3C/svg%3E'); }
+        
+        .folder-tabs { display: flex; gap: 5px; position: absolute; top: -35px; left: 20px; z-index: 0; }
+        .tab-btn { background: #d4a938; padding: 8px 20px; border-radius: 8px 8px 0 0; font-weight: 600; color: #554010; cursor: pointer; transition: all 0.2s; border: 1px solid #b88d22; border-bottom: none; }
+        .tab-btn:hover { background: #e6c27a; transform: translateY(-3px); }
+        .tab-btn.active { background: #fcfcfc; color: #333; z-index: 10; padding-bottom: 15px; margin-bottom: -10px; border-color: #ddd; }
+        
+        .folder-paper { flex-grow: 1; background: #fcfcfc; margin: 0 10px 10px 10px; border-radius: 5px; box-shadow: inset 0 0 10px rgba(0,0,0,0.05); padding: 30px; position: relative; z-index: 5; overflow-y: auto; background-image: repeating-linear-gradient(#fcfcfc, #fcfcfc 29px, #e5e5e5 30px); background-attachment: local; }
+
+        /* Botões CRUD */
+        .btn-action { padding: 6px 12px; border-radius: 4px; font-size: 0.85rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; transition: all 0.2s; }
+        .btn-edit { background: #3b82f6; color: white; }
+        .btn-delete { background: #ef4444; color: white; }
+        .btn-mural { background: #10b981; color: white; border: 1px solid #059669;}
+        
+        .crud-card { background: rgba(255,255,255,0.95); border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 15px; }
+        
+        .hidden-view { display: none !important; }
+
+        /* Message Box */
+        #msg-box { position: fixed; bottom: 20px; right: 20px; background: #333; color: white; padding: 15px 25px; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); transform: translateX(150%); transition: transform 0.3s; z-index: 9999; display: flex; align-items: center; gap: 10px; border-left: 5px solid #10b981; }
+        #msg-box.show { transform: translateX(0); }
+
+        /* --- VISÃO 0: LOGIN & PRIMEIRO ACESSO --- */
+        #login-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: radial-gradient(circle, #2a2a2a, #0a0a0a);
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.5s ease, visibility 0.5s ease;
+            overflow-y: auto;
+            padding: 16px;
+        }
+        .login-card {
+            background: #e4d8b4;
+            padding: 32px 36px;
+            border-radius: 5px;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.8), inset 0 0 30px rgba(0,0,0,0.2);
+            width: 95%;
+            max-width: 440px;
+            text-align: center;
+            border: 2px solid #332505;
+            background-image: repeating-linear-gradient(#f4ebd0, #f4ebd0 29px, #d4c390 30px);
+            background-attachment: local;
+            position: relative;
+        }
+        .login-card::before {
+            content: 'CONFIDENCIAL';
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%) rotate(-30deg);
+            font-size: 3rem;
+            color: rgba(220, 38, 38, 0.15);
+            font-weight: bold;
+            pointer-events: none;
+            white-space: nowrap;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        .login-card h2 {
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold;
+            font-size: 1.7rem;
+            color: #b91c1c;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+        }
+        .login-subtitle {
+            font-size: 0.8rem;
+            color: #5c4018;
+            border-bottom: 2px dashed #78350f;
+            padding-bottom: 10px;
+            margin-bottom: 18px;
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+        }
+        .auth-group {
+            text-align: left;
+            margin-bottom: 12px;
+            position: relative;
+            z-index: 1;
+        }
+        .auth-group label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: #451a03;
+            margin-bottom: 4px;
+            font-family: 'Inter', sans-serif;
+        }
+        .auth-group label .req {
+            color: #b91c1c;
+        }
+        .auth-group label .dica {
+            font-weight: 400;
+            color: #6b5335;
+            font-size: 0.75rem;
+        }
+        .login-card input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #78350f;
+            border-radius: 4px;
+            font-family: 'Courier New', Courier, monospace;
+            background: #fffef9;
+            font-weight: bold;
+            color: #333;
+            outline: none;
+        }
+        .login-card input:focus {
+            border-color: #b91c1c;
+            box-shadow: 0 0 5px rgba(185, 28, 28, 0.5);
+        }
+        .auth-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 14px;
+            position: relative;
+            z-index: 1;
+        }
+        .btn-auth-primary {
+            flex: 1;
+            padding: 11px 14px;
+            background: #1f2937;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 0.95rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-auth-primary:hover { background: #030712; }
+        .btn-auth-secondary {
+            flex: 1;
+            padding: 11px 14px;
+            background: #d8c89e;
+            color: #332505;
+            border: 1px solid #78350f;
+            border-radius: 4px;
+            font-size: 0.95rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-auth-secondary:hover { background: #cbb784; }
+
+        /* Banner IS_ / IE_ nas telas de autenticação */
+        .auth-banner {
+            display: none;
+            padding: 10px 12px;
+            border-radius: 4px;
+            margin-bottom: 14px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            text-align: left;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            font-family: 'Inter', sans-serif;
+            position: relative;
+            z-index: 1;
+            cursor: pointer;
+        }
+        .auth-banner.visivel { display: flex; }
+        .auth-banner.is_ok {
+            background: #e6f4ea;
+            color: #1e7e34;
+            border: 1px solid #bfe4c8;
+        }
+        .auth-banner.ie_erro {
+            background: #fdecec;
+            color: #b02a37;
+            border: 1px solid #efc4c8;
+        }
+        .auth-banner .cod {
+            font-family: Consolas, 'Courier New', monospace;
+            font-size: 0.72rem;
+            background: rgba(0, 0, 0, 0.08);
+            padding: 2px 6px;
+            border-radius: 4px;
+            white-space: nowrap;
+        }
+
+        .login-hint {
+            margin-top: 16px;
+            padding-top: 10px;
+            border-top: 1px dashed #927548;
+            font-size: 0.76rem;
+            color: #554010;
+            font-family: 'Inter', sans-serif;
+            text-align: left;
+            line-height: 1.45;
+            position: relative;
+            z-index: 1;
+        }
+        .login-hint code {
+            font-family: Consolas, 'Courier New', monospace;
+            background: rgba(255, 255, 255, 0.65);
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-weight: 600;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- VISÃO 0: LOGIN & PRIMEIRO ACESSO -->
+    <div id="login-overlay">
+        <div class="login-card">
+            <!-- PAINEL 1: I_Login -->
+            <div id="auth-login-panel">
+                <h2>Inquérito Digital</h2>
+                <div class="login-subtitle">Plataforma de investigação criminal — Acesso Restrito</div>
+                <div id="login-banner" class="auth-banner" onclick="this.classList.remove('visivel')"></div>
+                <form id="form-login" onsubmit="realizarLogin(event)" novalidate>
+                    <div class="auth-group">
+                        <label for="login-email">E-mail ou matrícula <span class="req">*</span></label>
+                        <input type="email" id="login-email" name="email" placeholder="ex.: karim@pcmg.gov.br">
+                    </div>
+                    <div class="auth-group">
+                        <label for="login-password">Senha <span class="req">*</span></label>
+                        <input type="password" id="login-password" name="senha" placeholder="••••••">
+                    </div>
+                    <div class="auth-actions">
+                        <button type="submit" class="btn-auth-primary">Entrar</button>
+                        <button type="button" class="btn-auth-secondary" onclick="alternarTelaAuth('cadastro')">Primeiro acesso</button>
+                    </div>
+                </form>
+                <div class="login-hint">
+                    Protótipo: qualquer investigador semeado entra com senha <code>123456</code> (ex.: <code>karim@pcmg.gov.br</code> ou <code>julio@pcmg.gov.br</code>). Erros previstos: <code>IE_LoginCamposObrigatorios</code>, <code>IE_LoginSenhaInvalida</code>.
+                </div>
+            </div>
+
+            <!-- PAINEL 2: I_CadastrarInvestigador (Primeiro Acesso) -->
+            <div id="auth-register-panel" class="hidden-view">
+                <h2>Primeiro Acesso</h2>
+                <div class="login-subtitle">RF014 — Cadastro de investigador</div>
+                <div id="register-banner" class="auth-banner" onclick="this.classList.remove('visivel')"></div>
+                <form id="form-investigador" onsubmit="cadastrarInvestigador(event)" novalidate>
+                    <div class="auth-group">
+                        <label for="reg-nome">Nome completo <span class="req">*</span></label>
+                        <input type="text" id="reg-nome" name="nome" placeholder="Nome completo">
+                    </div>
+                    <div class="auth-group">
+                        <label for="reg-unidade">Unidade/Delegacia <span class="req">*</span></label>
+                        <input type="text" id="reg-unidade" name="unidade" placeholder="ex.: 1ª DP — Campus">
+                    </div>
+                    <div class="auth-group">
+                        <label for="reg-email">E-mail <span class="req">*</span></label>
+                        <input type="email" id="reg-email" name="email" placeholder="ex.: nome@pcmg.gov.br">
+                    </div>
+                    <div class="auth-group">
+                        <label for="reg-senha">Senha <span class="req">*</span> <span class="dica">mínimo 6 caracteres</span></label>
+                        <input type="password" id="reg-senha" name="senha" placeholder="••••••">
+                    </div>
+                    <div class="auth-actions">
+                        <button type="submit" class="btn-auth-primary">Cadastrar</button>
+                        <button type="button" class="btn-auth-secondary" onclick="alternarTelaAuth('login')">Voltar ao login</button>
+                    </div>
+                </form>
+                <div class="login-hint">
+                    Erros previstos: <code>IE_CadastroInvestigadorCampoInvalido</code>, <code>IE_InvestigadorDuplicado</code>. Sucesso: <code>IS_CadastroInvestigador</code>.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- VISÃO 1: MURAL DE INVESTIGAÇÃO -->
+    <section id="view-mural" class="corkboard">
+        
+        <!-- Camada para Linhas (Fio Vermelho) -->
+        <svg id="svg-layer"></svg>
+        
+        <!-- Camada para Desenho Livre (Caneta) -->
+        <canvas id="draw-layer"></canvas>
+
+        <!-- Barra de Ferramentas -->
+        <div class="tools-panel">
+            <button class="tool-btn" onclick="addPostIt()" data-title="Novo Post-it">
+                <i class="fa-solid fa-sticky-note"></i>
+            </button>
+            <button class="tool-btn" id="tool-delete" onclick="toggleTool('delete')" data-title="Apagar Item (Clique no item)">
+                <i class="fa-solid fa-eraser"></i>
+            </button>
+            <button class="tool-btn" id="tool-pen" onclick="toggleTool('pen')" data-title="Caneta Vermelha (Desenho livre)">
+                <i class="fa-solid fa-pen"></i>
+            </button>
+            <button class="tool-btn" id="tool-thread" onclick="toggleTool('thread')" data-title="Fio Vermelho (Ligue 2 itens)">
+                <i class="fa-solid fa-share-nodes"></i>
+            </button>
+            <button class="tool-btn mt-4 bg-gray-600 hover:bg-gray-500 text-sm" onclick="clearCanvas()" data-title="Limpar Desenhos e Fios">
+                <i class="fa-solid fa-trash-can"></i>
+            </button>
+        </div>
+
+        <!-- Botão para Arquivo -->
+        <div class="box-icon-container" onclick="switchView('view-archive')" title="Abrir Arquivo Central">
+            <div class="box-back"></div>
+            <div class="box-folder"></div>
+            <div class="box-front"><div class="box-label"></div></div>
+            <div class="absolute -bottom-6 left-0 text-white font-bold text-sm bg-black/50 px-2 rounded w-full text-center">Caixa 1</div>
+        </div>
+
+        <!-- Área para elementos do Mural (Inicialmente Vazia) -->
+        <div id="mural-dynamic-area">
+        </div>
+    </section>
+
+    <!-- VISÃO 2: ARQUIVO (Vista Superior) -->
+    <section id="view-archive" class="archive-drawer hidden-view">
+        <div class="w-full max-w-[900px] flex justify-between mb-4 items-end">
+            <h1 class="text-white text-3xl font-bold tracking-wider"><i class="fa-solid fa-box-archive mr-2 text-gray-400"></i> ARQUIVO CENTRAL</h1>
+            <div class="flex items-center gap-4">
+                <!-- Limitador de Capacidade -->
+                <div class="bg-gray-800 text-yellow-500 px-4 py-2 rounded font-mono font-bold border border-gray-600 shadow-inner">
+                    VOL: <span id="capacity-indicator">01/50</span>
+                </div>
+                <!-- Nova Investigação -->
+                <button onclick="createNewInvestigation()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded shadow transition font-bold">
+                    <i class="fa-solid fa-plus mr-1"></i> Nova Investigação
+                </button>
+                <button onclick="switchView('view-mural')" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded shadow transition">
+                    Voltar
+                </button>
+            </div>
+        </div>
+
+        <!-- Container Caixa 1 -->
+        <div class="drawer-interior" id="archive-list-1"></div>
+
+        <!-- Container Caixa 2 (Vazia) -->
+        <div class="drawer-interior hidden-view flex-col" id="archive-list-2"></div>
+
+        <!-- Seletores de Caixa -->
+        <div class="flex gap-4 mt-8 w-full max-w-[900px]">
+            <button id="btn-box1" onclick="switchBox(1)" class="bg-yellow-600 text-white px-6 py-2 rounded-t-lg font-bold border-b-4 border-yellow-800 flex-1 transition"><i class="fa-solid fa-box mr-1"></i> Caixa 1 (Ativos)</button>
+            <button id="btn-box2" onclick="switchBox(2)" class="bg-gray-600 text-white px-6 py-2 rounded-t-lg font-bold border-b-4 border-gray-800 opacity-60 hover:opacity-100 flex-1 transition"><i class="fa-solid fa-box-archive mr-1"></i> Caixa 2 (Arquivo Morto)</button>
+        </div>
+    </section>
+
+    <!-- VISÃO 3: ARQUIVO ABERTO (CRUD) -->
+    <section id="view-folder" class="desk-surface hidden-view">
+        <div class="absolute top-4 left-4">
+            <button onclick="closeFolder()" class="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded shadow-lg transition">
+                <i class="fa-solid fa-folder-closed mr-2"></i> Fechar Pasta Sem Salvar
+            </button>
+        </div>
+
+        <div class="open-folder flex flex-col">
+            <div class="folder-tabs">
+                <div class="tab-btn active" onclick="switchTab('tab-desc', this)">Descrição</div>
+                <div class="tab-btn" onclick="switchTab('tab-susp', this)">Suspeitos</div>
+                <div class="tab-btn" onclick="switchTab('tab-armas', this)">Evidências</div>
+                <div class="tab-btn" onclick="switchTab('tab-equipe', this)">Equipe</div>
+            </div>
+
+            <div class="folder-paper flex-grow overflow-y-auto mb-0 rounded-b-none border-b border-gray-300">
+                <!-- ABA 1: Descrição -->
+                <div id="tab-desc" class="tab-content">
+                    <h2 class="text-2xl font-bold mb-4 border-b-2 border-gray-300 pb-2 text-gray-800">Relatório Inicial do Inquérito</h2>
+                    <div class="mb-4">
+                        <label class="block text-sm font-bold text-gray-700 mb-1">Descrição dos Fatos (Editável no rascunho):</label>
+                        <textarea id="draft-desc" class="w-full p-3 border border-gray-300 rounded focus:ring-2 focus:ring-yellow-500 outline-none resize-none bg-transparent" rows="8" oninput="updateDraft('desc', this.value)" placeholder="Descreva o caso aqui..."></textarea>
+                    </div>
+                </div>
+
+                <!-- ABA 2: Suspeitos (CRUD) -->
+                <div id="tab-susp" class="tab-content hidden-view">
+                    <div class="flex justify-between items-center mb-6 border-b-2 border-gray-300 pb-2">
+                        <h2 class="text-2xl font-bold text-gray-800">Fichamento de Suspeitos</h2>
+                        <button class="btn-action bg-gray-800 text-white hover:bg-gray-700" onclick="addEntity('suspects')"><i class="fa-solid fa-plus"></i> Novo</button>
+                    </div>
+                    <div id="container-suspects"></div>
+                </div>
+
+                <!-- ABA 3: Evidências -->
+                <div id="tab-armas" class="tab-content hidden-view">
+                    <div class="flex justify-between items-center mb-6 border-b-2 border-gray-300 pb-2">
+                        <h2 class="text-2xl font-bold text-gray-800">Evidências e Apreensões</h2>
+                        <button class="btn-action bg-gray-800 text-white hover:bg-gray-700" onclick="addEntity('evidences')"><i class="fa-solid fa-plus"></i> Novo</button>
+                    </div>
+                    <div id="container-evidences"></div>
+                </div>
+
+                <!-- ABA 4: Equipe -->
+                <div id="tab-equipe" class="tab-content hidden-view">
+                    <div class="flex justify-between items-center mb-6 border-b-2 border-gray-300 pb-2">
+                        <h2 class="text-2xl font-bold text-gray-800">Equipe de Investigação</h2>
+                        <button class="btn-action bg-gray-800 text-white hover:bg-gray-700" onclick="addEntity('team')"><i class="fa-solid fa-plus"></i> Novo</button>
+                    </div>
+                    <div id="container-team"></div>
+                </div>
+            </div>
+
+            <!-- RODAPÉ FIXO DO DOSSIÊ (Isolado e sem sobreposição) -->
+            <div class="flex-shrink-0 bg-[#d4a938] border-t border-[#b88d22] p-4 flex items-center justify-between rounded-br-[15px] z-20">
+                <div class="flex items-center gap-4">
+                    <input type="text" id="draft-title" class="bg-yellow-100 border border-yellow-700 rounded px-3 py-2 font-bold text-lg outline-none w-72 text-yellow-900 placeholder-yellow-700 shadow-inner" oninput="updateDraft('title', this.value)" placeholder="Título do Caso">
+                    <select id="draft-box" class="bg-yellow-100 border border-yellow-700 rounded px-3 py-2 text-yellow-900 font-bold outline-none cursor-pointer shadow-inner" onchange="updateDraft('box', this.value)">
+                        <option value="1">Mover para Caixa 1</option>
+                        <option value="2">Mover para Caixa 2</option>
+                    </select>
+                </div>
+                <button onclick="saveDraft()" class="bg-green-600 hover:bg-green-500 text-white font-bold px-6 py-2 rounded shadow transition flex items-center gap-2">
+                    <i class="fa-solid fa-save text-lg"></i> Salvar Alterações
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Message Box Customizada -->
+    <div id="msg-box">
+        <i class="fa-solid fa-circle-info text-xl text-emerald-400"></i>
+        <span id="msg-text">Ação realizada!</span>
+    </div>
+
+    <script>
+        // --- SISTEMA DE LOGIN & CADASTRO DE INVESTIGADOR (RF009 / RF014) ---
+        const CHAVE_INVESTIGADORES = 'id_investigadores';
+        const INVESTIGADORES_SEMEADOS = [
+            { id: 1, nome: 'Karim Soares Lentz', email: 'karim@pcmg.gov.br', unidade: '1ª DP — Campus', senha: '123456' },
+            { id: 2, nome: 'Júlio César Requena Fraga', email: 'julio@pcmg.gov.br', unidade: '2ª DP — Campus', senha: '123456' },
+            { id: 3, nome: 'Rafaella Tavares Moreira', email: 'rafaella@pcmg.gov.br', unidade: '3ª DP — Campus', senha: '123456' }
+        ];
+        const MSG_AUTH = {
+            IE_LoginCamposObrigatorios: 'Informe e-mail e senha',
+            IE_LoginSenhaInvalida: 'Credenciais inválidas',
+            IS_Login: 'Login realizado com sucesso',
+            IS_CadastroInvestigador: 'Investigador cadastrado com sucesso. Faça seu login.',
+            IE_InvestigadorDuplicado: 'Já existe investigador cadastrado com este e-mail',
+            IE_CadastroInvestigadorCampoInvalido: 'Nome, e-mail, unidade e senha (mínimo 6 caracteres) são obrigatórios'
+        };
+
+        let memoriaInvestigadores = INVESTIGADORES_SEMEADOS.map(item => ({ ...item }));
+
+        function lerInvestigadores() {
+            try {
+                const salvo = localStorage.getItem(CHAVE_INVESTIGADORES);
+                if (salvo) {
+                    const parsed = JSON.parse(salvo);
+                    if (Array.isArray(parsed) && parsed.length > 0 && parsed.every(x => x && x.email && x.senha)) {
+                        memoriaInvestigadores = parsed;
+                        return memoriaInvestigadores;
+                    }
+                }
+            } catch (e) {
+                // Fallback automático para memoriaInvestigadores caso localStorage falhe
+            }
+            return memoriaInvestigadores;
+        }
+
+        function gravarInvestigadores(lista) {
+            memoriaInvestigadores = lista;
+            try {
+                localStorage.setItem(CHAVE_INVESTIGADORES, JSON.stringify(lista));
+                localStorage.setItem('id_sem_plantado', '1');
+            } catch (e) {
+                // Mantém em memória caso localStorage esteja indisponível
+            }
+        }
+
+        function semearInvestigadores() {
+            const atuais = lerInvestigadores();
+            const faltantes = INVESTIGADORES_SEMEADOS.filter(
+                sem => !atuais.some(x => String(x.email || '').toLowerCase() === sem.email.toLowerCase())
+            );
+            if (faltantes.length > 0) {
+                gravarInvestigadores([...atuais, ...faltantes]);
+            } else {
+                gravarInvestigadores(atuais);
+            }
+        }
+        semearInvestigadores();
+
+        function mostrarBannerAuth(bannerId, tipo, codigo) {
+            const b = document.getElementById(bannerId);
+            if (!b) return;
+            b.textContent = '';
+            b.appendChild(document.createTextNode(MSG_AUTH[codigo] || codigo));
+            const chip = document.createElement('span');
+            chip.className = 'cod';
+            chip.textContent = codigo;
+            b.appendChild(chip);
+            b.className = 'auth-banner visivel ' + (tipo === 'IS' ? 'is_ok' : 'ie_erro');
+        }
+
+        function alternarTelaAuth(tela) {
+            document.getElementById('login-banner').classList.remove('visivel');
+            document.getElementById('register-banner').classList.remove('visivel');
+
+            const loginPanel = document.getElementById('auth-login-panel');
+            const registerPanel = document.getElementById('auth-register-panel');
+
+            if (tela === 'cadastro') {
+                loginPanel.classList.add('hidden-view');
+                registerPanel.classList.remove('hidden-view');
+            } else {
+                registerPanel.classList.add('hidden-view');
+                loginPanel.classList.remove('hidden-view');
+            }
+        }
+
+        function cadastrarInvestigador(event) {
+            if (event) event.preventDefault();
+            const nome = document.getElementById('reg-nome').value.trim();
+            const unidade = document.getElementById('reg-unidade').value.trim();
+            const email = document.getElementById('reg-email').value.trim();
+            const senha = document.getElementById('reg-senha').value;
+
+            if (!nome || !email || !unidade || senha.length < 6 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                return mostrarBannerAuth('register-banner', 'IE', 'IE_CadastroInvestigadorCampoInvalido');
+            }
+
+            const investigadores = lerInvestigadores();
+            if (investigadores.some((x) => String(x.email || '').trim().toLowerCase() === email.toLowerCase())) {
+                return mostrarBannerAuth('register-banner', 'IE', 'IE_InvestigadorDuplicado');
+            }
+
+            const novoInvestigador = {
+                id: Math.max(0, ...investigadores.map((x) => Number(x.id) || 0)) + 1,
+                nome: nome,
+                email: email,
+                unidade: unidade,
+                senha: senha
+            };
+            gravarInvestigadores(investigadores.concat(novoInvestigador));
+
+            document.getElementById('form-investigador').reset();
+            alternarTelaAuth('login');
+            document.getElementById('login-email').value = novoInvestigador.email;
+            document.getElementById('login-password').value = '';
+            mostrarBannerAuth('login-banner', 'IS', 'IS_CadastroInvestigador');
+        }
+
+        function realizarLogin(event) {
+            if (event) event.preventDefault();
+            const email = document.getElementById('login-email').value.trim();
+            const pass = document.getElementById('login-password').value;
+
+            if (!email || !pass) {
+                return mostrarBannerAuth('login-banner', 'IE', 'IE_LoginCamposObrigatorios');
+            }
+
+            const lista = lerInvestigadores();
+            const inv = lista.find((x) => String(x.email || '').trim().toLowerCase() === email.toLowerCase());
+            if (!inv || String(inv.senha) !== String(pass)) {
+                return mostrarBannerAuth('login-banner', 'IE', 'IE_LoginSenhaInvalida');
+            }
+
+            try {
+                sessionStorage.setItem('id_sessao', JSON.stringify(inv));
+            } catch (e) {}
+
+            const overlay = document.getElementById('login-overlay');
+            overlay.style.opacity = '0';
+            setTimeout(() => {
+                overlay.style.display = 'none';
+                showMessage(`${MSG_AUTH.IS_Login}. Bem-vindo(a), ${inv.nome} (${inv.unidade}).`);
+            }, 500);
+        }
+
+        // --- UTILITÁRIOS ---
+        function showMessage(text) {
+            const msgBox = document.getElementById('msg-box');
+            document.getElementById('msg-text').innerText = text;
+            msgBox.classList.add('show');
+            setTimeout(() => msgBox.classList.remove('show'), 3000);
+        }
+
+        function generateId() {
+            return 'item_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        // --- NAVEGAÇÃO DE VIEWS ---
+        function switchView(viewId) {
+            ['view-mural', 'view-archive', 'view-folder'].forEach(id => {
+                document.getElementById(id).classList.toggle('hidden-view', id !== viewId);
+            });
+        }
+
+        function switchTab(tabId, btnElement) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden-view'));
+            document.getElementById(tabId).classList.remove('hidden-view');
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            btnElement.classList.add('active');
+        }
+
+        // --- SISTEMA DE DADOS (STATE & DRAFT) ---
+        let casesData = [];
+        const maxCapacity = 50;
+        let draftCase = null;
+
+        function updateCapacityDisplay() {
+            const count = casesData.length;
+            document.getElementById('capacity-indicator').innerText = count.toString().padStart(2, '0') + '/' + maxCapacity;
+        }
+
+        function renderBoxes() {
+            const l1 = document.getElementById('archive-list-1');
+            const l2 = document.getElementById('archive-list-2');
+            l1.innerHTML = ''; l2.innerHTML = '';
+
+            casesData.forEach((c, index) => {
+                const folder = document.createElement('div');
+                folder.className = 'archive-folder';
+                folder.style.zIndex = Math.max(1, 50 - index);
+                folder.onclick = () => openFolder(c.id);
+                folder.innerHTML = `
+                    <div class="folder-tab-top" style="left: ${10 + (index * 15 % 70)}%;">INV-${String(c.id).padStart(3, '0')}</div>
+                    <div class="folder-title-view mt-1">${c.title}</div>
+                `;
+                if(String(c.box) === "1") l1.appendChild(folder);
+                else l2.appendChild(folder);
+            });
+            updateCapacityDisplay();
+        }
+
+        function createNewInvestigation() {
+            if(casesData.length >= maxCapacity) {
+                showMessage("Limite da Caixa atingido!");
+                return;
+            }
+            const newId = Date.now();
+            casesData.push({
+                id: newId,
+                title: 'Nova Investigação',
+                box: 1,
+                desc: '',
+                suspects: [],
+                evidences: [],
+                team: []
+            });
+            renderBoxes();
+            showMessage("Nova pasta em branco criada. Clique nela para editar.");
+        }
+
+        // --- LÓGICA DO RASCUNHO (DRAFT) ---
+        function openFolder(caseId) {
+            const original = casesData.find(c => c.id === caseId);
+            if(!original) return;
+            
+            draftCase = JSON.parse(JSON.stringify(original));
+            
+            document.getElementById('draft-title').value = draftCase.title;
+            document.getElementById('draft-box').value = draftCase.box;
+            document.getElementById('draft-desc').value = draftCase.desc;
+            
+            renderEntities();
+
+            switchView('view-folder');
+            switchTab('tab-desc', document.querySelector('.tab-btn'));
+        }
+
+        function closeFolder() {
+            draftCase = null;
+            switchView('view-archive');
+            showMessage("Pasta fechada. Alterações não salvas foram descartadas.");
+        }
+
+        function saveDraft() {
+            if(!draftCase) return;
+            const index = casesData.findIndex(c => c.id === draftCase.id);
+            if(index !== -1) {
+                casesData[index] = JSON.parse(JSON.stringify(draftCase));
+                renderBoxes();
+                showMessage("Alterações salvas com sucesso!");
+                switchView('view-archive');
+            }
+        }
+
+        function updateDraft(field, value) {
+            if(draftCase) draftCase[field] = value;
+        }
+
+        // --- CRUD DE ENTIDADES (SUSPEITOS, EVIDÊNCIAS, EQUIPE) NO RASCUNHO ---
+        function addEntity(type) {
+            if(!draftCase) return;
+            draftCase[type].push({ id: Date.now(), name: '', role: '' });
+            renderEntities();
+        }
+
+        function updateEntity(type, id, field, value) {
+            const entity = draftCase[type].find(e => e.id === id);
+            if(entity) entity[field] = value;
+        }
+
+        function removeEntity(type, id) {
+            draftCase[type] = draftCase[type].filter(e => e.id !== id);
+            renderEntities();
+        }
+
+        function renderEntities() {
+            renderList('suspects', 'container-suspects', 'fa-user', 'Suspeito');
+            renderList('evidences', 'container-evidences', 'fa-file-invoice-dollar', 'Evidência');
+            renderList('team', 'container-team', 'fa-id-badge', 'Membro da Equipe');
+        }
+
+        function renderList(type, containerId, icon, label) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            draftCase[type].forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'crud-card flex items-start gap-4 mb-4';
+                div.innerHTML = `
+                    <div class="w-16 h-16 rounded bg-gray-200 flex items-center justify-center text-gray-600 border border-gray-300 flex-shrink-0"><i class="fa-solid ${icon} text-2xl"></i></div>
+                    <div class="flex-grow flex flex-col gap-2">
+                        <input type="text" class="font-bold text-lg text-gray-800 border-b border-dashed border-gray-400 outline-none bg-transparent w-full" value="${item.name}" oninput="updateEntity('${type}', ${item.id}, 'name', this.value)" placeholder="Nome">
+                        <input type="text" class="text-sm text-gray-600 border-b border-dashed border-gray-400 outline-none bg-transparent w-full" value="${item.role}" oninput="updateEntity('${type}', ${item.id}, 'role', this.value)" placeholder="Descrição/Cargo">
+                    </div>
+                    <div class="flex flex-col gap-2 flex-shrink-0">
+                        ${type !== 'team' ? `<button class="btn-action btn-mural text-xs" onclick="sendToMuralItem('${type}', ${item.id})"><i class="fa-solid fa-thumbtack"></i> Pro Mural</button>` : ''}
+                        <button class="btn-action btn-delete text-xs" onclick="removeEntity('${type}', ${item.id})"><i class="fa-solid fa-trash"></i> Remover</button>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+            if(draftCase[type].length === 0) {
+                container.innerHTML = `<p class="text-gray-500 italic">Nenhum registro encontrado. Clique em 'Novo'.</p>`;
+            }
+        }
+
+        function sendToMuralItem(type, id) {
+            if(!draftCase) return;
+            const item = draftCase[type].find(e => e.id === id);
+            if(item) {
+                const text = (item.name || 'Desconhecido') + (item.role ? '\n' + item.role : '');
+                sendToMural(type, text, null);
+                closeFolder();
+            }
+        }
+
+        function switchBox(boxNum) {
+            const b1 = document.getElementById('btn-box1');
+            const b2 = document.getElementById('btn-box2');
+            const l1 = document.getElementById('archive-list-1');
+            const l2 = document.getElementById('archive-list-2');
+
+            if(boxNum === 1) {
+                b1.classList.replace('bg-gray-600', 'bg-yellow-600');
+                b1.classList.remove('opacity-60');
+                b1.classList.replace('border-gray-800', 'border-yellow-800');
+                
+                b2.classList.replace('bg-yellow-600', 'bg-gray-600');
+                b2.classList.add('opacity-60');
+                b2.classList.replace('border-yellow-800', 'border-gray-800');
+                
+                l1.classList.remove('hidden-view');
+                l2.classList.add('hidden-view');
+            } else {
+                b2.classList.replace('bg-gray-600', 'bg-yellow-600');
+                b2.classList.remove('opacity-60');
+                b2.classList.replace('border-yellow-800', 'border-gray-800');
+                
+                b1.classList.replace('bg-yellow-600', 'bg-gray-600');
+                b1.classList.add('opacity-60');
+                b1.classList.replace('border-yellow-800', 'border-gray-800');
+                
+                l2.classList.remove('hidden-view');
+                l2.classList.remove('flex-col');
+                l2.classList.add('flex-col');
+                l1.classList.add('hidden-view');
+            }
+        }
+
+        // Chamada Inicial
+        renderBoxes();
+
+        // --- SISTEMA DE DRAG AND DROP E MURAL ---
+        const muralArea = document.getElementById('view-mural');
+        let activeElement = null;
+        let offsetX = 0, offsetY = 0, zIndexCounter = 100;
+        
+        // Estados das Ferramentas
+        let currentTool = null;
+        let threadStartNode = null;
+
+        // Toolbar Logic
+        function toggleTool(tool) {
+            ['delete', 'pen', 'thread'].forEach(t => {
+                document.getElementById(`tool-${t}`).classList.remove('active');
+            });
+            
+            muralArea.classList.remove('delete-mode', 'thread-mode');
+            
+            if (currentTool === tool) {
+                currentTool = null;
+                document.getElementById('draw-layer').style.pointerEvents = 'none';
+            } else {
+                currentTool = tool;
+                document.getElementById(`tool-${tool}`).classList.add('active');
+                
+                if(tool === 'delete') muralArea.classList.add('delete-mode');
+                if(tool === 'thread') muralArea.classList.add('thread-mode');
+                
+                if (tool === 'pen') {
+                    document.getElementById('draw-layer').style.pointerEvents = 'auto';
+                    showMessage("Caneta ativada. Desenhe livremente no mural.");
+                } else {
+                    document.getElementById('draw-layer').style.pointerEvents = 'none';
+                }
+            }
+            threadStartNode = null;
+        }
+
+        function addPostIt() {
+            const area = document.getElementById('mural-dynamic-area');
+            const newElement = document.createElement('div');
+            const centerX = window.innerWidth / 2 - 100;
+            const centerY = window.innerHeight / 2 - 100;
+            
+            newElement.className = 'draggable post-it resizable';
+            newElement.style.left = `${centerX}px`;
+            newElement.style.top = `${centerY}px`;
+            newElement.style.setProperty('--rand', Math.random());
+            newElement.id = generateId();
+            newElement.innerHTML = `
+                <div class="pin"></div>
+                <textarea class="w-full h-full bg-transparent outline-none resize-none border-none text-gray-800" style="font-family: inherit;" placeholder="Escreva..."></textarea>
+            `;
+            area.appendChild(newElement);
+            showMessage("Novo Post-it adicionado. Você pode redimensioná-lo no canto inferior.");
+        }
+
+        function sendToMural(type, text, imageUrl) {
+            const area = document.getElementById('mural-dynamic-area');
+            const newElement = document.createElement('div');
+            const centerX = window.innerWidth / 2 - 100 + (Math.random() * 50 - 25);
+            const centerY = window.innerHeight / 2 - 100 + (Math.random() * 50 - 25);
+            
+            newElement.className = 'draggable ' + (type === 'suspeito' ? 'polaroid' : 'post-it resizable');
+            newElement.style.left = `${centerX}px`;
+            newElement.style.top = `${centerY}px`;
+            newElement.style.setProperty('--rand', Math.random());
+            newElement.id = generateId();
+
+            if (type === 'suspeito' && imageUrl) {
+                newElement.innerHTML = `<div class="pin"></div><img src="${imageUrl}" alt="${text}" draggable="false"><div class="mt-2">${text}</div>`;
+            } else {
+                newElement.innerHTML = `<div class="pin"></div><textarea class="w-full h-full bg-transparent outline-none resize-none border-none font-family-caveat text-gray-800" style="font-family: inherit;">${text}</textarea>`;
+            }
+
+            area.appendChild(newElement);
+            switchView('view-mural');
+            showMessage(`"${text}" transferido para o Mural.`);
+        }
+
+        // Lógica de Arrastar e Ferramentas (Mouse)
+        muralArea.addEventListener('mousedown', (e) => {
+            const draggable = e.target.closest('.draggable');
+            
+            if (draggable && e.button === 0) {
+                if (e.target.tagName.toLowerCase() === 'textarea' || (e.offsetX > draggable.clientWidth - 20 && e.offsetY > draggable.clientHeight - 20)) {
+                    return; 
+                }
+
+                if (currentTool === 'delete') {
+                    document.querySelectorAll(`#svg-layer line[data-source="${draggable.id}"], #svg-layer line[data-target="${draggable.id}"]`).forEach(l => l.remove());
+                    draggable.remove();
+                    return;
+                }
+
+                if (currentTool === 'thread') {
+                    if (!threadStartNode) {
+                        threadStartNode = draggable;
+                        showMessage("Selecione o segundo item para ligar.");
+                    } else if (threadStartNode !== draggable) {
+                        createThread(threadStartNode, draggable);
+                        threadStartNode = null;
+                        toggleTool(null);
+                        showMessage("Ligação criada!");
+                    }
+                    return;
+                }
+
+                activeElement = draggable;
+                zIndexCounter++;
+                activeElement.style.zIndex = zIndexCounter;
+                const rect = activeElement.getBoundingClientRect();
+                offsetX = e.clientX - rect.left;
+                offsetY = e.clientY - rect.top;
+            }
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (activeElement) {
+                activeElement.style.left = `${e.clientX - offsetX}px`;
+                activeElement.style.top = `${e.clientY - offsetY}px`;
+                updateThreads();
+            }
+        });
+
+        document.addEventListener('mouseup', () => { activeElement = null; });
+
+        // --- SISTEMA DE FIO VERMELHO (SVG) ---
+        function createThread(el1, el2) {
+            const svg = document.getElementById('svg-layer');
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.dataset.source = el1.id;
+            line.dataset.target = el2.id;
+            line.setAttribute('stroke', '#ef4444');
+            line.setAttribute('stroke-width', '3');
+            line.setAttribute('stroke-dasharray', '8,4');
+            svg.appendChild(line);
+            updateThreads();
+        }
+
+        function updateThreads() {
+            const lines = document.querySelectorAll('#svg-layer line');
+            lines.forEach(line => {
+                const el1 = document.getElementById(line.dataset.source);
+                const el2 = document.getElementById(line.dataset.target);
+                if (el1 && el2) {
+                    const rect1 = el1.getBoundingClientRect();
+                    const rect2 = el2.getBoundingClientRect();
+                    line.setAttribute('x1', rect1.left + rect1.width/2);
+                    line.setAttribute('y1', rect1.top + 20);
+                    line.setAttribute('x2', rect2.left + rect2.width/2);
+                    line.setAttribute('y2', rect2.top + 20);
+                } else {
+                    line.remove();
+                }
+            });
+        }
+
+        // --- SISTEMA DE DESENHO LIVRE (CANVAS) ---
+        const canvas = document.getElementById('draw-layer');
+        const ctx = canvas.getContext('2d');
+        let isDrawing = false;
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            updateThreads();
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (currentTool !== 'pen') return;
+            isDrawing = true;
+            ctx.beginPath();
+            ctx.moveTo(e.clientX, e.clientY);
+            ctx.strokeStyle = 'rgba(239, 68, 68, 0.8)';
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+        });
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDrawing) return;
+            ctx.lineTo(e.clientX, e.clientY);
+            ctx.stroke();
+        });
+        canvas.addEventListener('mouseup', () => { isDrawing = false; });
+        canvas.addEventListener('mouseout', () => { isDrawing = false; });
+
+        function clearCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            document.getElementById('svg-layer').innerHTML = '';
+            showMessage("Mural limpo (desenhos e fios apagados).");
+            toggleTool(null);
+        }
+
+        updateCapacityDisplay();
+        setTimeout(updateThreads, 100); 
+
+    </script>
+</body>
+</html>
