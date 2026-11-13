@@ -7,7 +7,7 @@ As regras abaixo seguem o capítulo 1 ("Especificação de Requisitos") do livro
 
 ## Regra V1 — Modelo de identificação
 
-Todo requisito funcional deve ter identificador no formato **RF + 3 dígitos** (RF001, RF002, ...) e todo requisito não funcional **NF + 3 dígitos** (NF001, NF002, ...), conforme o modelo da disciplina. O identificador não pode ser reutilizado e não deve ser renumerado depois de publicado. Numeração vigente do projeto: **RF001–RF015** e **NF001–NF008**.
+Todo requisito funcional deve ter identificador no formato **RF + 3 dígitos** (RF001, RF002, ...) e todo requisito não funcional **RNF + 3 dígitos** (RNF001, RNF002, ...), conforme o modelo da disciplina. O identificador não pode ser reutilizado e não deve ser renumerado depois de publicado. Numeração vigente do projeto: **RF001–RF015** e **RNF001–RNF008**.
 
 ## Regra V2 — Início com verbo no infinitivo
 
