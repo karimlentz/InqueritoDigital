@@ -7,11 +7,11 @@ As regras abaixo seguem o capítulo 1 ("Especificação de Requisitos") do livro
 
 ## Regra V1 — Modelo de identificação
 
-Todo requisito funcional deve ter identificador no formato **RF + 3 dígitos** (RF001, RF002, ...) e todo requisito não funcional **RNF + 3 dígitos** (RNF001, RNF002, ...), conforme o modelo da disciplina. O identificador não pode ser reutilizado e não deve ser renumerado depois de publicado. Numeração vigente do projeto: **RF001–RF015** e **RNF001–RNF008**.
+Todo requisito funcional deve ter identificador no formato **RF + 3 dígitos** (RF001, RF002, ...) e todo requisito não funcional **RNF + 3 dígitos** (RNF001, RNF002, ...), conforme o modelo da disciplina. O identificador não pode ser reutilizado e não deve ser renumerado depois de publicado. Numeração vigente do projeto: **RF001–RF020** e **RNF001–RNF012**.
 
 ## Regra V2 — Início com verbo no infinitivo
 
-O **título** de cada requisito funcional / caso de uso deve começar com **verbo no infinitivo**. Verificação: a primeira palavra do título deve constar da lista de verbos adotados (Realizar, Cadastrar, Consultar, Alterar, Excluir, Abrir, Encerrar, Registrar...). Requisitos não funcionais são títulos substantivos por natureza (ex.: "Tempo de resposta", "Padrão de mensagens") e ficam isentos desta regra.
+O **título** de cada requisito funcional / caso de uso deve começar com **verbo no infinitivo**. Verificação: a primeira palavra do título deve constar da lista de verbos adotados (Realizar, Cadastrar, Consultar, Alterar, Excluir, Abrir, Encerrar, Registrar, Inativar, Gerenciar, Atualizar, Cancelar, Concluir ...). Requisitos não funcionais são títulos substantivos por natureza (ex.: "Tempo de resposta", "Padrão de mensagens") e ficam isentos desta regra.
 
 ## Regra V3 — Proibição de termos subjetivos
 
@@ -31,7 +31,7 @@ Cada requisito funcional deve estar referenciado em, no mínimo: (a) uma tarefa 
 
 ## Regra V7 — Precondição de acesso
 
-Todo requisito cujo detalhamento só possa ser executado após autenticação deve declarar na pré-condição a expressão padrão **"Investigador autenticado"** (nas variações adotadas no documento: "O Investigador deve estar autenticado no sistema..." ou "Investigador autenticado, na tela `I_...`"). Verificação: busca textual por "autenticado". Exceções legítimas: RF009 (o login é o próprio requisito — pré-condição é o cadastro ativo) e RF014 (pré-condição é a inexistência de cadastro duplicado).
+Todo requisito cujo detalhamento só possa ser executado após autenticação deve declarar na pré-condição a expressão padrão **"Investigador autenticado"** (nas variações adotadas no documento: "O Investigador deve estar autenticado no sistema..." ou "Investigador autenticado, na tela `I_...`"). Verificação: busca textual por "autenticado". Exceções legítimas: RF001 (o login é o próprio requisito — pré-condição é o cadastro ativo) e RF002 (pré-condição é a inexistência de cadastro duplicado).
 
 ## Regra V8 — Duas colunas nos fluxos
 
