@@ -1,0 +1,50 @@
+
+# 1. Dependências e Bibliotecas
+node_modules/
+libraries/
+vendor/
+venv/
+.venv/
+
+# 2. Arquivos Compilados, Binários e Build
+*.exe
+*.o
+*.obj
+*.jar
+*.war
+*.class
+*.pyc
+__pycache__/
+dist/
+build/
+out/
+
+# 3. Variáveis de Ambiente e Dados Sensíveis
+.env
+.env.local
+.env.*.local
+senhas.txt
+*.pem
+*.key
+# Exceção: mantém o modelo de configuração de ambiente no repositório
+!.env.example
+
+# 4. Configurações Locais de IDEs e Editores
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+*.swp
+*~
+
+# 5. Logs, Bancos Locais e Sistema Operacional
+*.log
+erro?.log
+teste-[0-9].log
+# Exceção: mantém um arquivo de log de referência específico
+!teste-4.log
+*.sqlite
+*.sqlite3
+*.db
+.DS_Store
+Thumbs.db
