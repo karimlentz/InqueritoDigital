@@ -1,0 +1,1512 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inquérito Digital - Plataforma de Investigação Criminal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&family=Inter:wght@300;400;600;700&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #1a1a1a;
+        }
+
+        /* --- BARRA SUPERIOR DE SESSÃO E ACESSO RÁPIDO --- */
+        .top-hud {
+            position: fixed;
+            top: 14px;
+            left: 20px;
+            z-index: 120;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(24, 24, 27, 0.92);
+            border: 1px solid #3f3f46;
+            padding: 6px 12px;
+            border-radius: 8px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+            color: #f4f4f5;
+            font-size: 0.8rem;
+        }
+
+        /* --- VISÃO 1: MURAL --- */
+        .corkboard {
+            background-color: #a06b3e;
+            background-image: url('data:image/svg+xml,%3Csvg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noise"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100" height="100" filter="url(%23noise)" opacity="0.15"/%3E%3C/svg%3E');
+            box-shadow: inset 0 0 80px rgba(0,0,0,0.7);
+            height: 100vh;
+            width: 100vw;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #svg-layer {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 5;
+        }
+        #draw-layer {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 6;
+            pointer-events: none;
+        }
+
+        .tools-panel {
+            position: absolute;
+            left: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(30, 30, 30, 0.95);
+            border-radius: 12px;
+            padding: 15px 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 100;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.6);
+            border: 1px solid #444;
+        }
+        .tool-btn {
+            background: #444;
+            color: #ccc;
+            border: none;
+            width: 45px;
+            height: 45px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        .tool-btn:hover { background: #555; color: white; }
+        .tool-btn.active {
+            background: #ef4444;
+            color: white;
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.6);
+        }
+        .tool-btn::after {
+            content: attr(data-title);
+            position: absolute;
+            left: 60px;
+            background: black;
+            color: white;
+            font-size: 0.8rem;
+            padding: 5px 10px;
+            border-radius: 4px;
+            white-space: nowrap;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .tool-btn:hover::after { opacity: 1; }
+
+        .draggable {
+            position: absolute;
+            cursor: grab;
+            transition: transform 0.1s;
+            z-index: 20;
+        }
+        .draggable:active { cursor: grabbing; transform: scale(1.02); }
+
+        .delete-mode .draggable { cursor: pointer !important; border: 2px dashed #ef4444; }
+        .delete-mode .draggable:hover { opacity: 0.5; }
+        .thread-mode .draggable { cursor: crosshair !important; border: 2px dashed rgba(239,68,68,0.5); }
+        .thread-mode .draggable:hover { border-color: red; }
+
+        .post-it {
+            background: #ffebb5;
+            padding: 18px 14px 14px 14px;
+            width: 215px;
+            height: 195px;
+            box-shadow: 2px 4px 8px rgba(0,0,0,0.35);
+            font-family: 'Caveat', cursive;
+            font-size: 1.35rem;
+            color: #111;
+            transform: rotate(calc(-3deg + 6deg * var(--rand, 0.5)));
+            display: flex;
+            flex-direction: column;
+        }
+        .post-it.ficha-suspeito { background: #fee2e2; border-top: 4px solid #b91c1c; font-family: 'Inter', sans-serif; font-size: 0.82rem; }
+        .post-it.ficha-evidencia { background: #dbeafe; border-top: 4px solid #1d4ed8; font-family: 'Inter', sans-serif; font-size: 0.82rem; }
+
+        .resizable {
+            resize: both;
+            overflow: hidden;
+            min-width: 140px;
+            min-height: 130px;
+        }
+
+        .pin {
+            width: 14px;
+            height: 14px;
+            background: radial-gradient(circle at 30% 30%, #ff4b4b, #990000);
+            border-radius: 50%;
+            position: absolute;
+            top: 5px;
+            left: 50%;
+            transform: translateX(-50%);
+            box-shadow: 2px 4px 4px rgba(0,0,0,0.4), inset -2px -2px 4px rgba(0,0,0,0.3);
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        /* Ícone Caixa Animada */
+        .box-icon-container {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 80px;
+            height: 80px;
+            cursor: pointer;
+            z-index: 100;
+        }
+        .box-back { position: absolute; bottom: 0; width: 100%; height: 60%; background: #8B4513; border-radius: 4px; box-shadow: 2px 2px 10px rgba(0,0,0,0.5); }
+        .box-folder { position: absolute; bottom: 10px; left: 10%; width: 80%; height: 50%; background: #ffd700; border-radius: 4px 4px 0 0; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); border-top: 2px solid #e6c200; box-shadow: 0 -2px 5px rgba(0,0,0,0.2); }
+        .box-front { position: absolute; bottom: 0; width: 100%; height: 40%; background: #A0522D; border-radius: 0 0 4px 4px; border-top: 1px solid rgba(0,0,0,0.3); z-index: 10; display: flex; align-items: center; justify-content: center; }
+        .box-label { width: 30px; height: 15px; background: #f4f4f4; border: 1px solid #333; }
+        .box-icon-container:hover .box-folder { bottom: 30px; height: 60%; background: #ffea70; }
+        .box-icon-container:hover { transform: scale(1.05); }
+
+        /* --- VISÃO 2: ARQUIVO --- */
+        .archive-drawer { background-color: #2c2c2c; height: 100vh; width: 100vw; display: flex; flex-direction: column; align-items: center; padding: 3.5rem 2rem 2rem 2rem; box-shadow: inset 0 0 100px rgba(0,0,0,0.9); }
+        .drawer-interior { width: 85%; max-width: 940px; flex-grow: 1; background: #1f1f1f; border: 10px solid #3d3d3d; border-top: none; border-radius: 0 0 10px 10px; padding: 20px 40px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; position: relative; box-shadow: inset 0 20px 20px -20px rgba(0,0,0,0.8); }
+
+        .archive-folder { background: linear-gradient(to bottom, #f3c95c, #d4a938); border: 1px solid #b88d22; height: 64px; border-radius: 8px 8px 0 0; margin-top: -26px; position: relative; cursor: pointer; transition: transform 0.2s ease, margin 0.2s ease; box-shadow: 0 -4px 10px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: space-between; padding: 8px 20px 0 20px; }
+        .archive-folder:first-child { margin-top: 22px; }
+        .archive-folder:hover { transform: translateY(-18px); margin-bottom: 18px; z-index: 50 !important; background: linear-gradient(to bottom, #ffe082, #f3c95c); }
+
+        .folder-tab-top { background: #f3c95c; padding: 2px 15px; border-radius: 5px 5px 0 0; border: 1px solid #b88d22; border-bottom: none; font-weight: bold; font-size: 0.8rem; color: #554010; position: absolute; top: -22px; }
+        .folder-title-view { font-family: 'Inter', sans-serif; font-weight: bold; color: #332505; font-size: 1.05rem; }
+
+        /* --- VISÃO 3: ARQUIVO ABERTO (DOSSIÊ) --- */
+        .desk-surface { background-color: #3b424d; height: 100vh; width: 100vw; display: flex; justify-content: center; align-items: center; position: relative; }
+        .open-folder { width: 92%; max-width: 1040px; height: 84vh; background: #f4d068; border-radius: 5px 15px 15px 5px; box-shadow: 20px 20px 30px rgba(0,0,0,0.4), inset -5px 0 20px rgba(0,0,0,0.1); display: flex; flex-direction: column; position: relative; margin-top: 25px; }
+
+        .folder-tabs { display: flex; gap: 5px; position: absolute; top: -35px; left: 20px; z-index: 0; }
+        .tab-btn { background: #d4a938; padding: 8px 18px; border-radius: 8px 8px 0 0; font-weight: 600; color: #554010; cursor: pointer; transition: all 0.2s; border: 1px solid #b88d22; border-bottom: none; font-size: 0.9rem; }
+        .tab-btn:hover { background: #e6c27a; transform: translateY(-3px); }
+        .tab-btn.active { background: #fcfcfc; color: #333; z-index: 10; padding-bottom: 15px; margin-bottom: -10px; border-color: #ddd; }
+
+        .folder-paper { flex-grow: 1; background: #fcfcfc; margin: 0 10px 0 10px; border-radius: 5px 5px 0 0; box-shadow: inset 0 0 10px rgba(0,0,0,0.05); padding: 26px; position: relative; z-index: 5; overflow-y: auto; }
+
+        .btn-action { padding: 6px 12px; border-radius: 4px; font-size: 0.82rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; transition: all 0.2s; }
+        .btn-edit { background: #3b82f6; color: white; }
+        .btn-delete { background: #ef4444; color: white; }
+        .btn-mural { background: #10b981; color: white; border: 1px solid #059669; }
+
+        .crud-card { background: rgba(255,255,255,0.98); border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .hidden-view { display: none !important; }
+
+        /* Message Box (RNF002 - IS_ / IE_) */
+        #msg-box { position: fixed; bottom: 20px; right: 20px; background: #1f2937; color: white; padding: 14px 20px; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.4); transform: translateX(160%); transition: transform 0.3s; z-index: 9999; display: flex; align-items: center; gap: 10px; border-left: 5px solid #10b981; max-width: 440px; }
+        #msg-box.show { transform: translateX(0); }
+        #msg-box.erro { border-left-color: #ef4444; }
+
+        /* --- VISÃO 0: LOGIN & PRIMEIRO ACESSO --- */
+        #login-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: radial-gradient(circle, #2a2a2a, #0a0a0a);
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.4s ease;
+            overflow-y: auto;
+            padding: 16px;
+        }
+        .login-card {
+            background: #e4d8b4;
+            padding: 32px 36px;
+            border-radius: 5px;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.8), inset 0 0 30px rgba(0,0,0,0.2);
+            width: 95%;
+            max-width: 440px;
+            text-align: center;
+            border: 2px solid #332505;
+            background-image: repeating-linear-gradient(#f4ebd0, #f4ebd0 29px, #d4c390 30px);
+            position: relative;
+        }
+        .login-card::before {
+            content: 'CONFIDENCIAL';
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%) rotate(-30deg);
+            font-size: 3rem;
+            color: rgba(220, 38, 38, 0.15);
+            font-weight: bold;
+            pointer-events: none;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        .login-card h2 {
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold;
+            font-size: 1.7rem;
+            color: #b91c1c;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+        }
+        .login-subtitle {
+            font-size: 0.8rem;
+            color: #5c4018;
+            border-bottom: 2px dashed #78350f;
+            padding-bottom: 10px;
+            margin-bottom: 18px;
+            font-weight: 600;
+        }
+        .auth-group { text-align: left; margin-bottom: 12px; position: relative; z-index: 1; }
+        .auth-group label { display: block; font-size: 0.8rem; font-weight: 700; color: #451a03; margin-bottom: 4px; }
+        .auth-group label .req { color: #b91c1c; }
+        .login-card input {
+            width: 100%; padding: 10px 12px; border: 1px solid #78350f; border-radius: 4px;
+            font-family: 'Courier New', Courier, monospace; background: #fffef9; font-weight: bold; color: #333; outline: none;
+        }
+        .auth-actions { display: flex; gap: 10px; margin-top: 14px; position: relative; z-index: 1; }
+        .btn-auth-primary { flex: 1; padding: 11px 14px; background: #1f2937; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
+        .btn-auth-secondary { flex: 1; padding: 11px 14px; background: #d8c89e; color: #332505; border: 1px solid #78350f; border-radius: 4px; font-weight: bold; cursor: pointer; }
+        .auth-banner {
+            display: none; padding: 10px 12px; border-radius: 4px; margin-bottom: 14px; font-size: 0.82rem; font-weight: 600;
+            text-align: left; justify-content: space-between; align-items: center; gap: 8px; position: relative; z-index: 1;
+        }
+        .auth-banner.visivel { display: flex; }
+        .auth-banner.is_ok { background: #e6f4ea; color: #1e7e34; border: 1px solid #bfe4c8; }
+        .auth-banner.ie_erro { background: #fdecec; color: #b02a37; border: 1px solid #efc4c8; }
+        .auth-banner .cod { font-family: Consolas, monospace; font-size: 0.72rem; background: rgba(0,0,0,0.08); padding: 2px 6px; border-radius: 4px; }
+        .login-hint { margin-top: 16px; padding-top: 10px; border-top: 1px dashed #927548; font-size: 0.75rem; color: #554010; text-align: left; position: relative; z-index: 1; }
+    </style>
+</head>
+<body>
+
+    <!-- HUD SUPERIOR (Sessão + Cadastros Base + Evidência BD) -->
+    <div id="top-hud" class="top-hud hidden-view">
+        <span><i class="fa-solid fa-user-shield text-yellow-400 mr-1"></i> <strong id="hud-user">Investigador</strong></span>
+        <span class="text-gray-500">|</span>
+        <button onclick="switchView('view-mural')" class="hover:text-yellow-400 transition font-semibold"><i class="fa-solid fa-thumbtack mr-1"></i>Mural</button>
+        <button onclick="switchView('view-archive')" class="hover:text-yellow-400 transition font-semibold"><i class="fa-solid fa-box-archive mr-1"></i>Arquivo</button>
+        <button onclick="abrirModalCadastros('suspeitos')" class="hover:text-yellow-400 transition font-semibold"><i class="fa-solid fa-user-secret mr-1"></i>Suspeitos (CPF)</button>
+        <button onclick="abrirModalCadastros('evidencias')" class="hover:text-yellow-400 transition font-semibold"><i class="fa-solid fa-fingerprint mr-1"></i>Evidências</button>
+        <button onclick="abrirAuditoriaBD()" class="bg-emerald-700 hover:bg-emerald-600 text-white px-2.5 py-1 rounded font-semibold transition">
+            <i class="fa-solid fa-database mr-1"></i>Evidência BD (Print)
+        </button>
+        <button onclick="fazerLogout()" class="bg-red-800 hover:bg-red-700 text-white px-2.5 py-1 rounded font-semibold transition">Sair</button>
+    </div>
+
+    <!-- VISÃO 0: LOGIN & PRIMEIRO ACESSO (RF001 / RF002) -->
+    <div id="login-overlay">
+        <div class="login-card">
+            <div id="auth-login-panel">
+                <h2>Inquérito Digital</h2>
+                <div class="login-subtitle">Plataforma de investigação criminal — Acesso Restrito</div>
+                <div id="login-banner" class="auth-banner" onclick="this.classList.remove('visivel')"></div>
+                <form id="form-login" onsubmit="realizarLogin(event)" novalidate>
+                    <div class="auth-group">
+                        <label for="login-email">E-mail ou matrícula <span class="req">*</span></label>
+                        <input type="text" id="login-email" placeholder="ex.: karim@pcmg.gov.br ou MAT-1001">
+                    </div>
+                    <div class="auth-group">
+                        <label for="login-password">Senha <span class="req">*</span></label>
+                        <input type="password" id="login-password" placeholder="••••••">
+                    </div>
+                    <div class="auth-actions">
+                        <button type="submit" class="btn-auth-primary">Entrar</button>
+                        <button type="button" class="btn-auth-secondary" onclick="alternarTelaAuth('cadastro')">Primeiro acesso</button>
+                    </div>
+                </form>
+                <div class="login-hint">
+                    Contas semeadas (senha <code>123456</code>): <code>karim@pcmg.gov.br</code>, <code>julio@pcmg.gov.br</code>, <code>rafaella@pcmg.gov.br</code>.
+                </div>
+            </div>
+
+            <div id="auth-register-panel" class="hidden-view">
+                <h2>Primeiro Acesso</h2>
+                <div class="login-subtitle">RF002 — Cadastro de investigador</div>
+                <div id="register-banner" class="auth-banner" onclick="this.classList.remove('visivel')"></div>
+                <form id="form-investigador" onsubmit="cadastrarInvestigador(event)" novalidate>
+                    <div class="auth-group">
+                        <label for="reg-nome">Nome completo <span class="req">*</span></label>
+                        <input type="text" id="reg-nome" placeholder="Nome completo">
+                    </div>
+                    <div class="auth-group">
+                        <label for="reg-unidade">Unidade/Delegacia <span class="req">*</span></label>
+                        <input type="text" id="reg-unidade" placeholder="ex.: 1ª DP — Campus">
+                    </div>
+                    <div class="auth-group">
+                        <label for="reg-matricula">Matrícula funcional (opcional)</label>
+                        <input type="text" id="reg-matricula" placeholder="ex.: MAT-2026">
+                    </div>
+                    <div class="auth-group">
+                        <label for="reg-email">E-mail <span class="req">*</span></label>
+                        <input type="email" id="reg-email" placeholder="ex.: nome@pcmg.gov.br">
+                    </div>
+                    <div class="auth-group">
+                        <label for="reg-senha">Senha <span class="req">*</span> (mínimo 6 caracteres)</label>
+                        <input type="password" id="reg-senha" placeholder="••••••">
+                    </div>
+                    <div class="auth-actions">
+                        <button type="submit" class="btn-auth-primary">Cadastrar</button>
+                        <button type="button" class="btn-auth-secondary" onclick="alternarTelaAuth('login')">Voltar ao login</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- VISÃO 1: MURAL DE INVESTIGAÇÃO (RF020) -->
+    <section id="view-mural" class="corkboard">
+        <svg id="svg-layer"></svg>
+        <canvas id="draw-layer"></canvas>
+
+        <div class="tools-panel">
+            <button class="tool-btn" onclick="addPostIt()" data-title="Novo Post-it">
+                <i class="fa-solid fa-sticky-note"></i>
+            </button>
+            <button class="tool-btn" id="tool-delete" onclick="toggleTool('delete')" data-title="Apagar Item (Clique no item)">
+                <i class="fa-solid fa-eraser"></i>
+            </button>
+            <button class="tool-btn" id="tool-pen" onclick="toggleTool('pen')" data-title="Caneta Vermelha (Desenho livre)">
+                <i class="fa-solid fa-pen"></i>
+            </button>
+            <button class="tool-btn" id="tool-thread" onclick="toggleTool('thread')" data-title="Fio Vermelho (Ligue 2 itens)">
+                <i class="fa-solid fa-share-nodes"></i>
+            </button>
+            <button class="tool-btn mt-4 bg-gray-600 hover:bg-gray-500 text-sm" onclick="clearCanvas()" data-title="Limpar Desenhos e Fios">
+                <i class="fa-solid fa-trash-can"></i>
+            </button>
+        </div>
+
+        <div class="box-icon-container" onclick="switchView('view-archive')" title="Abrir Arquivo Central">
+            <div class="box-back"></div>
+            <div class="box-folder"></div>
+            <div class="box-front"><div class="box-label"></div></div>
+            <div class="absolute -bottom-6 left-0 text-white font-bold text-sm bg-black/50 px-2 rounded w-full text-center">Arquivo</div>
+        </div>
+
+        <div id="mural-dynamic-area"></div>
+    </section>
+
+    <!-- VISÃO 2: ARQUIVO CENTRAL (RF013 / RF014) -->
+    <section id="view-archive" class="archive-drawer hidden-view">
+        <div class="w-full max-w-[940px] flex justify-between mb-4 items-end">
+            <h1 class="text-white text-3xl font-bold tracking-wider"><i class="fa-solid fa-box-archive mr-2 text-gray-400"></i> ARQUIVO CENTRAL</h1>
+            <div class="flex items-center gap-3">
+                <div class="bg-gray-800 text-yellow-500 px-4 py-2 rounded font-mono font-bold border border-gray-600 shadow-inner">
+                    VOL: <span id="capacity-indicator">00/50</span>
+                </div>
+                <button onclick="abrirModalNovaInvestigacao()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded shadow transition font-bold">
+                    <i class="fa-solid fa-plus mr-1"></i> Nova Investigação
+                </button>
+                <button onclick="switchView('view-mural')" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded shadow transition">
+                    Voltar ao Mural
+                </button>
+            </div>
+        </div>
+
+        <div class="drawer-interior" id="archive-list-1"></div>
+        <div class="drawer-interior hidden-view flex-col" id="archive-list-2"></div>
+
+        <div class="flex gap-4 mt-6 w-full max-w-[940px]">
+            <button id="btn-box1" onclick="switchBox(1)" class="bg-yellow-600 text-white px-6 py-2 rounded-t-lg font-bold border-b-4 border-yellow-800 flex-1 transition"><i class="fa-solid fa-box mr-1"></i> Caixa 1 (Ativos)</button>
+            <button id="btn-box2" onclick="switchBox(2)" class="bg-gray-600 text-white px-6 py-2 rounded-t-lg font-bold border-b-4 border-gray-800 opacity-60 hover:opacity-100 flex-1 transition"><i class="fa-solid fa-box-archive mr-1"></i> Caixa 2 (Arquivo Morto)</button>
+        </div>
+    </section>
+
+    <!-- VISÃO 3: DOSSIÊ DA INVESTIGAÇÃO (RF014 – RF019) -->
+    <section id="view-folder" class="desk-surface hidden-view">
+        <div class="open-folder flex flex-col">
+            <div class="folder-tabs">
+                <div class="tab-btn active" onclick="switchTab('tab-desc', this)">Dados do Inquérito</div>
+                <div class="tab-btn" onclick="switchTab('tab-susp', this)">Suspeito Principal</div>
+                <div class="tab-btn" onclick="switchTab('tab-armas', this)">Evidências Vinculadas</div>
+                <div class="tab-btn" onclick="switchTab('tab-equipe', this)">Responsável & Histórico</div>
+            </div>
+
+            <div class="folder-paper flex-grow overflow-y-auto">
+                <div id="tab-desc" class="tab-content">
+                    <div class="flex justify-between items-center border-b-2 border-gray-300 pb-2 mb-4">
+                        <div>
+                            <span id="dossie-num" class="font-mono text-sm bg-gray-800 text-yellow-400 px-2 py-1 rounded">ISP-2026-0001</span>
+                            <span id="dossie-status-badge" class="ml-2 text-xs font-bold px-2.5 py-1 rounded bg-emerald-100 text-emerald-800">ABERTA</span>
+                        </div>
+                        <div id="dossie-acoes-status" class="flex gap-2">
+                            <button onclick="encerrarCaso('concluir')" class="btn-action bg-emerald-600 hover:bg-emerald-500 text-white"><i class="fa-solid fa-check"></i> Concluir Caso</button>
+                            <button onclick="encerrarCaso('cancelar')" class="btn-action bg-amber-600 hover:bg-amber-500 text-white"><i class="fa-solid fa-ban"></i> Cancelar Caso</button>
+                            <button onclick="excluirInvestigacaoAtual()" class="btn-action btn-delete"><i class="fa-solid fa-trash"></i> Excluir Caso</button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 mb-1">Data de Abertura</label>
+                            <input type="text" id="dossie-abertura" disabled class="w-full p-2 border rounded bg-gray-100 text-sm font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 mb-1">Data de Fechamento</label>
+                            <input type="text" id="dossie-fechamento" disabled class="w-full p-2 border rounded bg-gray-100 text-sm font-mono">
+                        </div>
+                    </div>
+
+                    <div id="box-justificativa" class="hidden-view bg-amber-50 border border-amber-300 p-3 rounded mb-4">
+                        <label class="block text-xs font-bold text-amber-900 mb-1">Justificativa de Encerramento (RF016/RF017):</label>
+                        <p id="dossie-justificativa-texto" class="text-sm text-gray-800"></p>
+                    </div>
+                </div>
+
+                <div id="tab-susp" class="tab-content hidden-view">
+                    <div class="flex justify-between items-center mb-4 border-b-2 border-gray-300 pb-2">
+                        <h2 class="text-xl font-bold text-gray-800">Suspeito Principal Associado</h2>
+                        <button onclick="abrirModalCadastros('suspeitos')" class="btn-action bg-gray-800 text-white"><i class="fa-solid fa-user-plus"></i> Gerenciar Cadastro de Suspeitos</button>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-bold text-gray-700 mb-1">Selecionar Suspeito ATIVO (Opcional):</label>
+                        <select id="dossie-select-suspeito" class="w-full p-2.5 border border-gray-300 rounded bg-white text-sm"></select>
+                    </div>
+                    <div id="dossie-suspeito-detalhe" class="crud-card"></div>
+                </div>
+
+                <div id="tab-armas" class="tab-content hidden-view">
+                    <div class="flex justify-between items-center mb-4 border-b-2 border-gray-300 pb-2">
+                        <h2 class="text-xl font-bold text-gray-800">Evidências e Apreensões do Caso</h2>
+                        <button onclick="abrirModalCadastros('evidencias')" class="btn-action bg-gray-800 text-white"><i class="fa-solid fa-plus"></i> Gerenciar Cadastro de Evidências</button>
+                    </div>
+                    <div class="flex gap-2 mb-4">
+                        <select id="dossie-select-evidencia" class="flex-grow p-2 border border-gray-300 rounded bg-white text-sm"></select>
+                        <button onclick="vincularEvidenciaAoDossie()" class="btn-action bg-blue-600 text-white"><i class="fa-solid fa-link"></i> Vincular</button>
+                    </div>
+                    <div id="container-evidences"></div>
+                </div>
+
+                <div id="tab-equipe" class="tab-content hidden-view">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4 border-b-2 border-gray-300 pb-2">Investigador Responsável & Histórico (RF019)</h2>
+                    <div class="mb-4">
+                        <label class="block text-sm font-bold text-gray-700 mb-1">Responsável Atual (Obrigatório):</label>
+                        <select id="dossie-select-responsavel" class="w-full p-2.5 border border-gray-300 rounded bg-white text-sm"></select>
+                    </div>
+                    <h3 class="text-sm font-bold text-gray-700 mb-2">Histórico de Responsáveis do Caso:</h3>
+                    <div id="container-historico"></div>
+                </div>
+            </div>
+
+            <div class="flex-shrink-0 bg-[#d4a938] border-t border-[#b88d22] p-4 flex items-center justify-between rounded-br-[15px] z-20">
+                <div class="flex items-center gap-3">
+                    <button onclick="switchView('view-archive')" class="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded font-semibold text-sm">
+                        <i class="fa-solid fa-arrow-left mr-1"></i> Voltar
+                    </button>
+                    <input type="text" id="draft-title" class="bg-yellow-100 border border-yellow-700 rounded px-3 py-2 font-bold text-base outline-none w-72 text-yellow-900" placeholder="Título do Caso">
+                    <select id="draft-box" class="bg-yellow-100 border border-yellow-700 rounded px-3 py-2 text-yellow-900 font-bold outline-none cursor-pointer">
+                        <option value="1">Caixa 1 (Ativos)</option>
+                        <option value="2">Caixa 2 (Arquivo Morto)</option>
+                    </select>
+                </div>
+                <button id="btn-salvar-dossie" onclick="salvarDossieAtual()" class="bg-green-600 hover:bg-green-500 text-white font-bold px-6 py-2 rounded shadow transition flex items-center gap-2">
+                    <i class="fa-solid fa-save"></i> Salvar Alterações
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- MODAL: NOVA INVESTIGAÇÃO (RF013) -->
+    <div id="modal-nova-inv" class="fixed inset-0 bg-black/75 z-[200] hidden-view flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg max-w-lg w-full p-6 shadow-2xl">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2"><i class="fa-solid fa-folder-plus mr-2 text-blue-600"></i>Registrar Nova Investigação (RF013)</h2>
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-gray-700">Número do Inquérito * (padrão ISP-AAAA-NNNN)</label>
+                    <input type="text" id="nova-inv-num" class="w-full p-2 border rounded font-mono" placeholder="ex.: ISP-2026-0114">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-700">Título do Caso *</label>
+                    <input type="text" id="nova-inv-titulo" class="w-full p-2 border rounded" placeholder="Resumo do inquérito">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-700">Investigador Responsável *</label>
+                    <select id="nova-inv-resp" class="w-full p-2 border rounded bg-white"></select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-700">Suspeito Principal (Opcional — somente ATIVOS)</label>
+                    <select id="nova-inv-susp" class="w-full p-2 border rounded bg-white"></select>
+                </div>
+            </div>
+            <div class="flex justify-end gap-2 mt-5">
+                <button onclick="fecharModal('modal-nova-inv')" class="px-4 py-2 bg-gray-300 rounded font-semibold">Cancelar</button>
+                <button onclick="criarInvestigacaoAPI()" class="px-4 py-2 bg-blue-600 text-white rounded font-bold">Abrir Caso</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: CRUD DE SUSPEITOS & EVIDÊNCIAS (RF003–RF012) -->
+    <div id="modal-cadastros" class="fixed inset-0 bg-black/75 z-[200] hidden-view flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg max-w-4xl w-full max-h-[88vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="bg-gray-900 text-white px-6 py-4 flex justify-between items-center">
+                <div class="flex gap-3">
+                    <button id="tab-crud-susp" onclick="alternarAbaCrud('suspeitos')" class="px-3 py-1.5 rounded font-bold bg-yellow-600 text-white">Suspeitos (RF003–RF007)</button>
+                    <button id="tab-crud-evid" onclick="alternarAbaCrud('evidencias')" class="px-3 py-1.5 rounded font-bold bg-gray-700 text-gray-200">Evidências (RF008–RF012)</button>
+                </div>
+                <button onclick="fecharModal('modal-cadastros')" class="text-gray-300 hover:text-white text-xl">&times;</button>
+            </div>
+
+            <div class="p-6 overflow-y-auto flex-grow">
+                <div id="painel-crud-suspeitos">
+                    <form id="form-suspeito" onsubmit="salvarSuspeitoAPI(event)" class="bg-gray-50 p-4 rounded border mb-5 grid grid-cols-2 gap-3">
+                        <input type="hidden" id="susp-id">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700">Nome Completo *</label>
+                            <input type="text" id="susp-nome" class="w-full p-2 border rounded text-sm" placeholder="Nome completo">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700">CPF * (11 dígitos válidos)</label>
+                            <input type="text" id="susp-cpf" maxlength="14" oninput="mascaraCPF(this)" class="w-full p-2 border rounded text-sm font-mono" placeholder="000.000.000-00">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700">Apelido (Opcional)</label>
+                            <input type="text" id="susp-apelido" class="w-full p-2 border rounded text-sm" placeholder="Vulgo">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700">Telefone (Opcional)</label>
+                            <input type="text" id="susp-telefone" class="w-full p-2 border rounded text-sm" placeholder="(35) 99999-9999">
+                        </div>
+                        <div class="col-span-2">
+                            <label class="block text-xs font-bold text-gray-700">Descrição Física / Perfil (Opcional)</label>
+                            <input type="text" id="susp-descricao" class="w-full p-2 border rounded text-sm" placeholder="Características relevantes">
+                        </div>
+                        <div class="col-span-2 flex justify-end gap-2">
+                            <button type="button" onclick="limparFormSuspeito()" class="px-3 py-1.5 bg-gray-300 rounded text-sm font-semibold">Limpar</button>
+                            <button type="submit" class="px-4 py-1.5 bg-emerald-600 text-white rounded text-sm font-bold">Salvar Suspeito</button>
+                        </div>
+                    </form>
+
+                    <div class="flex gap-2 mb-3">
+                        <input type="text" id="filtro-susp-busca" oninput="carregarSuspeitos()" class="flex-grow p-2 border rounded text-sm" placeholder="Buscar por nome, CPF ou apelido...">
+                        <select id="filtro-susp-status" onchange="carregarSuspeitos()" class="p-2 border rounded text-sm bg-white">
+                            <option value="">Todos os Status</option>
+                            <option value="ATIVO">ATIVO</option>
+                            <option value="INATIVO">INATIVO</option>
+                        </select>
+                    </div>
+                    <div id="lista-crud-suspeitos" class="space-y-2"></div>
+                </div>
+
+                <div id="painel-crud-evidencias" class="hidden-view">
+                    <form id="form-evidencia" onsubmit="salvarEvidenciaAPI(event)" class="bg-gray-50 p-4 rounded border mb-5 grid grid-cols-2 gap-3">
+                        <input type="hidden" id="evid-id">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700">Protocolo * (ex.: PER-2026-001)</label>
+                            <input type="text" id="evid-protocolo" class="w-full p-2 border rounded text-sm font-mono" placeholder="PER-2026-001">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700">Tipo *</label>
+                            <select id="evid-tipo" class="w-full p-2 border rounded text-sm bg-white">
+                                <option value="Armas">Armas</option>
+                                <option value="Biológico">Biológico</option>
+                                <option value="Documentos">Documentos</option>
+                                <option value="Veículos">Veículos</option>
+                                <option value="Drogas">Drogas</option>
+                                <option value="Diversos">Diversos</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700">Local de Coleta *</label>
+                            <input type="text" id="evid-local" class="w-full p-2 border rounded text-sm" placeholder="Endereço / Local">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700">Data de Coleta *</label>
+                            <input type="date" id="evid-data" class="w-full p-2 border rounded text-sm">
+                        </div>
+                        <div class="col-span-2">
+                            <label class="block text-xs font-bold text-gray-700">Descrição Detalhada *</label>
+                            <input type="text" id="evid-descricao" class="w-full p-2 border rounded text-sm" placeholder="Detalhes da evidência">
+                        </div>
+                        <div class="col-span-2 flex justify-end gap-2">
+                            <button type="button" onclick="limparFormEvidencia()" class="px-3 py-1.5 bg-gray-300 rounded text-sm font-semibold">Limpar</button>
+                            <button type="submit" class="px-4 py-1.5 bg-emerald-600 text-white rounded text-sm font-bold">Salvar Evidência</button>
+                        </div>
+                    </form>
+
+                    <div class="flex gap-2 mb-3">
+                        <input type="text" id="filtro-evid-busca" oninput="carregarEvidencias()" class="flex-grow p-2 border rounded text-sm" placeholder="Buscar por protocolo, tipo ou descrição...">
+                        <select id="filtro-evid-status" onchange="carregarEvidencias()" class="p-2 border rounded text-sm bg-white">
+                            <option value="">Todos os Status</option>
+                            <option value="ATIVO">ATIVO</option>
+                            <option value="INATIVO">INATIVO</option>
+                        </select>
+                    </div>
+                    <div id="lista-crud-evidencias" class="space-y-2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: EVIDÊNCIA DE FUNCIONAMENTO / AUDITORIA DO SQLITE (PARA PRINT) -->
+    <div id="modal-auditoria" class="fixed inset-0 bg-black/80 z-[250] hidden-view flex items-center justify-center p-4">
+        <div class="bg-gray-900 text-gray-100 border border-emerald-500 rounded-lg max-w-5xl w-full max-h-[90vh] flex flex-col shadow-2xl">
+            <div class="px-6 py-4 border-b border-gray-700 flex justify-between items-center">
+                <div>
+                    <h2 class="text-lg font-bold text-emerald-400"><i class="fa-solid fa-database mr-2"></i>Evidência de Persistência — Banco SQLite (data/inquerito.db)</h2>
+                    <p id="auditoria-meta" class="text-xs text-gray-400 font-mono mt-0.5"></p>
+                </div>
+                <button onclick="fecharModal('modal-auditoria')" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+            </div>
+            <div id="auditoria-conteudo" class="p-6 overflow-y-auto space-y-4 text-xs font-mono"></div>
+        </div>
+    </div>
+
+    <!-- Message Box (RNF002) -->
+    <div id="msg-box">
+        <i id="msg-icon" class="fa-solid fa-circle-info text-xl text-emerald-400"></i>
+        <div>
+            <div id="msg-code" class="text-[11px] font-mono opacity-75">IS_OK</div>
+            <div id="msg-text" class="text-sm font-semibold">Ação realizada!</div>
+        </div>
+    </div>
+
+    <script>
+        let usuarioAtual = null;
+        let listaInvestigadores = [];
+        let listaSuspeitos = [];
+        let listaEvidencias = [];
+        let casesData = [];
+        let dossieAtual = null;
+        const maxCapacity = 50;
+
+        async function api(url, options = {}) {
+            const res = await fetch(url, {
+                headers: { 'Content-Type': 'application/json' },
+                ...options
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.status === 401 && !url.includes('/api/auth/login')) {
+                document.getElementById('login-overlay').style.display = 'flex';
+                document.getElementById('login-overlay').style.opacity = '1';
+                document.getElementById('top-hud').classList.add('hidden-view');
+                throw new Error(data.mensagem || 'Sessão expirada');
+            }
+            if (!res.ok) {
+                showMessage(data.mensagem || 'Erro na operação', data.codigo || 'IE_Erro', true);
+                throw new Error(data.mensagem);
+            }
+            return data;
+        }
+
+        function showMessage(text, codigo = 'IS_OK', isErro = false) {
+            const msgBox = document.getElementById('msg-box');
+            const icon = document.getElementById('msg-icon');
+            document.getElementById('msg-code').innerText = codigo;
+            document.getElementById('msg-text').innerText = text;
+            msgBox.classList.toggle('erro', isErro);
+            icon.className = isErro ? 'fa-solid fa-triangle-exclamation text-xl text-red-400' : 'fa-solid fa-circle-check text-xl text-emerald-400';
+            msgBox.classList.add('show');
+            setTimeout(() => msgBox.classList.remove('show'), 3500);
+        }
+
+        function formatarCPF(cpf) {
+            const d = String(cpf || '').replace(/\D/g, '');
+            if (d.length !== 11) return cpf;
+            return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+        }
+
+        function mascaraCPF(input) {
+            let v = input.value.replace(/\D/g, '').slice(0, 11);
+            v = v.replace(/(\d{3})(\d)/, '$1.$2');
+            v = v.replace(/(\d{3})(\d)/, '$1.$2');
+            v = v.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+            input.value = v;
+        }
+
+        function alternarTelaAuth(tela) {
+            document.getElementById('login-banner').classList.remove('visivel');
+            document.getElementById('register-banner').classList.remove('visivel');
+            document.getElementById('auth-login-panel').classList.toggle('hidden-view', tela === 'cadastro');
+            document.getElementById('auth-register-panel').classList.toggle('hidden-view', tela !== 'cadastro');
+        }
+
+        function mostrarBannerAuth(bannerId, tipo, codigo, msg) {
+            const b = document.getElementById(bannerId);
+            b.innerHTML = `<span>${msg}</span><span class="cod">${codigo}</span>`;
+            b.className = 'auth-banner visivel ' + (tipo === 'IS' ? 'is_ok' : 'ie_erro');
+        }
+
+        async function cadastrarInvestigador(e) {
+            e.preventDefault();
+            try {
+                const res = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        nome: document.getElementById('reg-nome').value,
+                        unidade: document.getElementById('reg-unidade').value,
+                        matricula: document.getElementById('reg-matricula').value,
+                        email: document.getElementById('reg-email').value,
+                        senha: document.getElementById('reg-senha').value
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) return mostrarBannerAuth('register-banner', 'IE', data.codigo, data.mensagem);
+
+                const emailSalvo = document.getElementById('reg-email').value;
+                document.getElementById('form-investigador').reset();
+                alternarTelaAuth('login');
+                document.getElementById('login-email').value = emailSalvo;
+                mostrarBannerAuth('login-banner', 'IS', data.codigo, data.mensagem);
+            } catch (err) {}
+        }
+
+        async function realizarLogin(e) {
+            e.preventDefault();
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        credencial: document.getElementById('login-email').value,
+                        senha: document.getElementById('login-password').value
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) return mostrarBannerAuth('login-banner', 'IE', data.codigo, data.mensagem);
+
+                await iniciarSessaoNoFront();
+                showMessage(`${data.mensagem} Bem-vindo(a), ${data.usuario.nome}.`, data.codigo);
+            } catch (err) {}
+        }
+
+        async function fazerLogout() {
+            await api('/api/auth/logout', { method: 'POST' });
+            location.reload();
+        }
+
+        async function iniciarSessaoNoFront() {
+            const me = await api('/api/auth/me');
+            usuarioAtual = me.usuario;
+            listaInvestigadores = me.investigadores;
+
+            document.getElementById('hud-user').innerText = `${usuarioAtual.nome} (${usuarioAtual.unidade})`;
+            document.getElementById('top-hud').classList.remove('hidden-view');
+            const overlay = document.getElementById('login-overlay');
+            overlay.style.opacity = '0';
+            setTimeout(() => { overlay.style.display = 'none'; }, 350);
+
+            await Promise.all([carregarSuspeitos(), carregarEvidencias(), carregarInvestigacoes(), carregarMural()]);
+        }
+
+        iniciarSessaoNoFront().catch(() => {});
+
+        function switchView(viewId) {
+            ['view-mural', 'view-archive', 'view-folder'].forEach(id => {
+                document.getElementById(id).classList.toggle('hidden-view', id !== viewId);
+            });
+            if (viewId === 'view-archive') carregarInvestigacoes();
+            if (viewId === 'view-mural') carregarMural();
+        }
+
+        function switchTab(tabId, btnElement) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden-view'));
+            document.getElementById(tabId).classList.remove('hidden-view');
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            btnElement.classList.add('active');
+        }
+
+        function fecharModal(id) {
+            document.getElementById(id).classList.add('hidden-view');
+        }
+
+        async function abrirModalCadastros(aba) {
+            document.getElementById('modal-cadastros').classList.remove('hidden-view');
+            alternarAbaCrud(aba);
+            await Promise.all([carregarSuspeitos(), carregarEvidencias()]);
+        }
+
+        function alternarAbaCrud(aba) {
+            const isSusp = aba === 'suspeitos';
+            document.getElementById('painel-crud-suspeitos').classList.toggle('hidden-view', !isSusp);
+            document.getElementById('painel-crud-evidencias').classList.toggle('hidden-view', isSusp);
+            document.getElementById('tab-crud-susp').className = isSusp ? 'px-3 py-1.5 rounded font-bold bg-yellow-600 text-white' : 'px-3 py-1.5 rounded font-bold bg-gray-700 text-gray-200';
+            document.getElementById('tab-crud-evid').className = !isSusp ? 'px-3 py-1.5 rounded font-bold bg-yellow-600 text-white' : 'px-3 py-1.5 rounded font-bold bg-gray-700 text-gray-200';
+        }
+
+        async function carregarSuspeitos() {
+            const busca = document.getElementById('filtro-susp-busca')?.value || '';
+            const status = document.getElementById('filtro-susp-status')?.value || '';
+            listaSuspeitos = await api(`/api/suspeitos?busca=${encodeURIComponent(busca)}&status=${encodeURIComponent(status)}`);
+
+            const container = document.getElementById('lista-crud-suspeitos');
+            if (!container) return;
+            if (listaSuspeitos.length === 0) {
+                container.innerHTML = '<p class="text-sm text-gray-500 italic">Nenhum suspeito encontrado.</p>';
+                return;
+            }
+            container.innerHTML = listaSuspeitos.map(s => `
+                <div class="border rounded p-3 flex justify-between items-center bg-white">
+                    <div>
+                        <div class="font-bold text-gray-800">
+                            ${s.Nome} ${s.Apelido ? `<span class="text-xs text-gray-500">("${s.Apelido}")</span>` : ''}
+                            <span class="ml-2 text-xs px-2 py-0.5 rounded ${s.Status === 'ATIVO' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-700'}">${s.Status}</span>
+                        </div>
+                        <div class="text-xs text-gray-600 font-mono mt-0.5">CPF: ${formatarCPF(s.Cpf)} ${s.Telefone ? `| Tel: ${s.Telefone}` : ''} | Vínculos: ${s.TotalVinculos}</div>
+                        ${s.Descricao ? `<div class="text-xs text-gray-500 mt-0.5">${s.Descricao}</div>` : ''}
+                    </div>
+                    <div class="flex gap-1.5">
+                        <button onclick="enviarEntidadeParaMural('SUSPEITO', ${s.Id})" class="btn-action btn-mural text-xs"><i class="fa-solid fa-thumbtack"></i> Pro Mural</button>
+                        <button onclick="editarSuspeitoForm(${s.Id})" class="btn-action btn-edit text-xs"><i class="fa-solid fa-pen"></i></button>
+                        ${s.TotalVinculos > 0 && s.Status === 'ATIVO'
+                            ? `<button onclick="inativarSuspeitoAPI(${s.Id})" class="btn-action bg-amber-600 text-white text-xs">Inativar</button>`
+                            : s.TotalVinculos === 0
+                                ? `<button onclick="excluirSuspeitoAPI(${s.Id})" class="btn-action btn-delete text-xs"><i class="fa-solid fa-trash"></i></button>`
+                                : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function editarSuspeitoForm(id) {
+            const s = listaSuspeitos.find(x => x.Id === id);
+            if (!s) return;
+            document.getElementById('susp-id').value = s.Id;
+            document.getElementById('susp-nome').value = s.Nome;
+            document.getElementById('susp-cpf').value = formatarCPF(s.Cpf);
+            document.getElementById('susp-apelido').value = s.Apelido || '';
+            document.getElementById('susp-telefone').value = s.Telefone || '';
+            document.getElementById('susp-descricao').value = s.Descricao || '';
+        }
+
+        function limparFormSuspeito() {
+            document.getElementById('form-suspeito').reset();
+            document.getElementById('susp-id').value = '';
+        }
+
+        async function salvarSuspeitoAPI(e) {
+            e.preventDefault();
+            const id = document.getElementById('susp-id').value;
+            const payload = {
+                nome: document.getElementById('susp-nome').value,
+                cpf: document.getElementById('susp-cpf').value,
+                apelido: document.getElementById('susp-apelido').value,
+                telefone: document.getElementById('susp-telefone').value,
+                descricao: document.getElementById('susp-descricao').value
+            };
+            const res = await api(id ? `/api/suspeitos/${id}` : '/api/suspeitos', {
+                method: id ? 'PUT' : 'POST',
+                body: JSON.stringify(payload)
+            });
+            showMessage(res.mensagem, res.codigo);
+            limparFormSuspeito();
+            await carregarSuspeitos();
+            if (dossieAtual) abrirPastaDossie(dossieAtual.Id);
+        }
+
+        async function inativarSuspeitoAPI(id) {
+            if (!confirm('Deseja inativar este suspeito? Ele não poderá ser vinculado a novos casos.')) return;
+            const res = await api(`/api/suspeitos/${id}/inativar`, { method: 'PATCH' });
+            showMessage(res.mensagem, res.codigo);
+            await carregarSuspeitos();
+        }
+
+        async function excluirSuspeitoAPI(id) {
+            if (!confirm('Confirmar exclusão física permanente deste suspeito?')) return;
+            const res = await api(`/api/suspeitos/${id}`, { method: 'DELETE' });
+            showMessage(res.mensagem, res.codigo);
+            await carregarSuspeitos();
+        }
+
+        async function carregarEvidencias() {
+            const busca = document.getElementById('filtro-evid-busca')?.value || '';
+            const status = document.getElementById('filtro-evid-status')?.value || '';
+            listaEvidencias = await api(`/api/evidencias?busca=${encodeURIComponent(busca)}&status=${encodeURIComponent(status)}`);
+
+            const container = document.getElementById('lista-crud-evidencias');
+            if (!container) return;
+            if (listaEvidencias.length === 0) {
+                container.innerHTML = '<p class="text-sm text-gray-500 italic">Nenhuma evidência encontrada.</p>';
+                return;
+            }
+            container.innerHTML = listaEvidencias.map(ev => `
+                <div class="border rounded p-3 flex justify-between items-center bg-white">
+                    <div>
+                        <div class="font-bold text-gray-800">
+                            <span class="font-mono text-blue-700">${ev.Protocolo}</span> — ${ev.Tipo}
+                            <span class="ml-2 text-xs px-2 py-0.5 rounded ${ev.Status === 'ATIVO' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-700'}">${ev.Status}</span>
+                        </div>
+                        <div class="text-xs text-gray-700 mt-0.5">${ev.Descricao}</div>
+                        <div class="text-xs text-gray-500 mt-0.5">Local: ${ev.LocalColeta} | Data: ${ev.DataColeta} | Vínculos: ${ev.TotalVinculos}</div>
+                    </div>
+                    <div class="flex gap-1.5">
+                        <button onclick="enviarEntidadeParaMural('EVIDENCIA', ${ev.Id})" class="btn-action btn-mural text-xs"><i class="fa-solid fa-thumbtack"></i> Pro Mural</button>
+                        <button onclick="editarEvidenciaForm(${ev.Id})" class="btn-action btn-edit text-xs"><i class="fa-solid fa-pen"></i></button>
+                        ${ev.TotalVinculos > 0 && ev.Status === 'ATIVO'
+                            ? `<button onclick="inativarEvidenciaAPI(${ev.Id})" class="btn-action bg-amber-600 text-white text-xs">Inativar</button>`
+                            : ev.TotalVinculos === 0
+                                ? `<button onclick="excluirEvidenciaAPI(${ev.Id})" class="btn-action btn-delete text-xs"><i class="fa-solid fa-trash"></i></button>`
+                                : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function editarEvidenciaForm(id) {
+            const ev = listaEvidencias.find(x => x.Id === id);
+            if (!ev) return;
+            document.getElementById('evid-id').value = ev.Id;
+            document.getElementById('evid-protocolo').value = ev.Protocolo;
+            document.getElementById('evid-tipo').value = ev.Tipo;
+            document.getElementById('evid-local').value = ev.LocalColeta;
+            document.getElementById('evid-data').value = ev.DataColeta;
+            document.getElementById('evid-descricao').value = ev.Descricao;
+        }
+
+        function limparFormEvidencia() {
+            document.getElementById('form-evidencia').reset();
+            document.getElementById('evid-id').value = '';
+        }
+
+        async function salvarEvidenciaAPI(e) {
+            e.preventDefault();
+            const id = document.getElementById('evid-id').value;
+            const payload = {
+                protocolo: document.getElementById('evid-protocolo').value,
+                tipo: document.getElementById('evid-tipo').value,
+                localColeta: document.getElementById('evid-local').value,
+                dataColeta: document.getElementById('evid-data').value,
+                descricao: document.getElementById('evid-descricao').value
+            };
+            const res = await api(id ? `/api/evidencias/${id}` : '/api/evidencias', {
+                method: id ? 'PUT' : 'POST',
+                body: JSON.stringify(payload)
+            });
+            showMessage(res.mensagem, res.codigo);
+            limparFormEvidencia();
+            await carregarEvidencias();
+            if (dossieAtual) abrirPastaDossie(dossieAtual.Id);
+        }
+
+        async function inativarEvidenciaAPI(id) {
+            if (!confirm('Deseja inativar esta evidência?')) return;
+            const res = await api(`/api/evidencias/${id}/inativar`, { method: 'PATCH' });
+            showMessage(res.mensagem, res.codigo);
+            await carregarEvidencias();
+        }
+
+        async function excluirEvidenciaAPI(id) {
+            if (!confirm('Confirmar exclusão física permanente desta evidência?')) return;
+            const res = await api(`/api/evidencias/${id}`, { method: 'DELETE' });
+            showMessage(res.mensagem, res.codigo);
+            await carregarEvidencias();
+        }
+
+        // --- ARQUIVO CENTRAL & INVESTIGAÇÕES (RF013 – RF019) ---
+        async function carregarInvestigacoes() {
+            casesData = await api('/api/investigacoes');
+            renderBoxes();
+        }
+
+        function renderBoxes() {
+            const l1 = document.getElementById('archive-list-1');
+            const l2 = document.getElementById('archive-list-2');
+            l1.innerHTML = '';
+            l2.innerHTML = '';
+
+            casesData.forEach((c, index) => {
+                const folder = document.createElement('div');
+                folder.className = 'archive-folder';
+                folder.style.zIndex = Math.max(1, 50 - index);
+                folder.onclick = () => abrirPastaDossie(c.Id);
+                folder.innerHTML = `
+                    <div class="folder-tab-top" style="left: ${10 + (index * 15 % 65)}%;">${c.NumeroInquerito}</div>
+                    <div class="folder-title-view">${c.Titulo}</div>
+                    <div class="text-xs font-bold px-2 py-0.5 rounded bg-black/15 text-amber-950">${c.Status} • Resp: ${c.ResponsavelNome}</div>
+                `;
+                if (Number(c.Caixa) === 1) l1.appendChild(folder);
+                else l2.appendChild(folder);
+            });
+            document.getElementById('capacity-indicator').innerText = String(casesData.length).padStart(2, '0') + '/' + maxCapacity;
+        }
+
+        function switchBox(boxNum) {
+            const b1 = document.getElementById('btn-box1');
+            const b2 = document.getElementById('btn-box2');
+            const l1 = document.getElementById('archive-list-1');
+            const l2 = document.getElementById('archive-list-2');
+            const isBox1 = boxNum === 1;
+
+            b1.className = isBox1 ? 'bg-yellow-600 text-white px-6 py-2 rounded-t-lg font-bold border-b-4 border-yellow-800 flex-1 transition' : 'bg-gray-600 text-white px-6 py-2 rounded-t-lg font-bold border-b-4 border-gray-800 opacity-60 hover:opacity-100 flex-1 transition';
+            b2.className = !isBox1 ? 'bg-yellow-600 text-white px-6 py-2 rounded-t-lg font-bold border-b-4 border-yellow-800 flex-1 transition' : 'bg-gray-600 text-white px-6 py-2 rounded-t-lg font-bold border-b-4 border-gray-800 opacity-60 hover:opacity-100 flex-1 transition';
+            l1.classList.toggle('hidden-view', !isBox1);
+            l2.classList.toggle('hidden-view', isBox1);
+        }
+
+        async function abrirModalNovaInvestigacao() {
+            await carregarSuspeitos();
+            const selResp = document.getElementById('nova-inv-resp');
+            selResp.innerHTML = listaInvestigadores.map(i => `<option value="${i.Id}" ${i.Id === usuarioAtual.id ? 'selected' : ''}>${i.Nome} (${i.Unidade})</option>`).join('');
+
+            const selSusp = document.getElementById('nova-inv-susp');
+            const ativos = listaSuspeitos.filter(s => s.Status === 'ATIVO');
+            selSusp.innerHTML = '<option value="">-- Nenhum suspeito vinculado --</option>' +
+                ativos.map(s => `<option value="${s.Id}">${s.Nome} — CPF: ${formatarCPF(s.Cpf)}</option>`).join('');
+
+            document.getElementById('nova-inv-num').value = `ISP-2026-${String(Math.floor(1000 + Math.random() * 9000))}`;
+            document.getElementById('nova-inv-titulo').value = '';
+            document.getElementById('modal-nova-inv').classList.remove('hidden-view');
+        }
+
+        async function criarInvestigacaoAPI() {
+            const res = await api('/api/investigacoes', {
+                method: 'POST',
+                body: JSON.stringify({
+                    numeroInquerito: document.getElementById('nova-inv-num').value,
+                    titulo: document.getElementById('nova-inv-titulo').value,
+                    codInvestigador: Number(document.getElementById('nova-inv-resp').value),
+                    codSuspeito: document.getElementById('nova-inv-susp').value ? Number(document.getElementById('nova-inv-susp').value) : null
+                })
+            });
+            fecharModal('modal-nova-inv');
+            showMessage(res.mensagem, res.codigo);
+            await carregarInvestigacoes();
+            abrirPastaDossie(res.dado.Id);
+        }
+
+        async function abrirPastaDossie(id) {
+            await Promise.all([carregarSuspeitos(), carregarEvidencias()]);
+            dossieAtual = await api(`/api/investigacoes/${id}`);
+            const aberta = dossieAtual.Status === 'ABERTA';
+
+            document.getElementById('dossie-num').innerText = dossieAtual.NumeroInquerito;
+            document.getElementById('dossie-status-badge').innerText = dossieAtual.Status;
+            document.getElementById('dossie-abertura').value = dossieAtual.DataAbertura;
+            document.getElementById('dossie-fechamento').value = dossieAtual.DataFechamento || 'Em andamento';
+            document.getElementById('draft-title').value = dossieAtual.Titulo;
+            document.getElementById('draft-box').value = String(dossieAtual.Caixa || 1);
+
+            document.getElementById('dossie-acoes-status').classList.toggle('hidden-view', !aberta);
+            document.getElementById('btn-salvar-dossie').classList.toggle('hidden-view', !aberta);
+
+            const boxJust = document.getElementById('box-justificativa');
+            if (dossieAtual.Justificativa) {
+                boxJust.classList.remove('hidden-view');
+                document.getElementById('dossie-justificativa-texto').innerText = dossieAtual.Justificativa;
+            } else {
+                boxJust.classList.add('hidden-view');
+            }
+
+            const selSusp = document.getElementById('dossie-select-suspeito');
+            selSusp.disabled = !aberta;
+            const opcoesSusp = listaSuspeitos.filter(s => s.Status === 'ATIVO' || s.Id === dossieAtual.CodSuspeito);
+            selSusp.innerHTML = '<option value="">Nenhum suspeito principal associado</option>' +
+                opcoesSusp.map(s => `<option value="${s.Id}" ${s.Id === dossieAtual.CodSuspeito ? 'selected' : ''}>${s.Nome} — CPF: ${formatarCPF(s.Cpf)} [${s.Status}]</option>`).join('');
+            renderizarCardSuspeitoDossie();
+
+            const selEv = document.getElementById('dossie-select-evidencia');
+            selEv.disabled = !aberta;
+            const evAtivas = listaEvidencias.filter(e => e.Status === 'ATIVO' && !dossieAtual.evidencias.some(v => v.Id === e.Id));
+            selEv.innerHTML = '<option value="">Selecione uma evidência ATIVA...</option>' +
+                evAtivas.map(e => `<option value="${e.Id}">${e.Protocolo} (${e.Tipo}) — ${e.Descricao}</option>`).join('');
+            renderizarEvidenciasDossie(aberta);
+
+            const selResp = document.getElementById('dossie-select-responsavel');
+            selResp.disabled = !aberta;
+            selResp.innerHTML = listaInvestigadores.map(i => `<option value="${i.Id}" ${i.Id === dossieAtual.CodInvestigador ? 'selected' : ''}>${i.Nome} (${i.Unidade})</option>`).join('');
+            document.getElementById('container-historico').innerHTML = dossieAtual.historico.map(h => `
+                <div class="crud-card flex justify-between items-center text-sm">
+                    <div><strong>${h.InvestigadorNome}</strong> (${h.Unidade})</div>
+                    <div class="font-mono text-xs text-gray-600">Início: ${h.DataInicio} | Fim: ${h.DataFim || 'Vigente (Atual)'}</div>
+                </div>
+            `).join('');
+
+            switchView('view-folder');
+            switchTab('tab-desc', document.querySelector('.tab-btn'));
+        }
+
+        function renderizarCardSuspeitoDossie() {
+            const box = document.getElementById('dossie-suspeito-detalhe');
+            if (!dossieAtual.CodSuspeito) {
+                box.innerHTML = '<p class="text-sm text-gray-500 italic">Nenhum suspeito principal associado.</p>';
+                return;
+            }
+            box.innerHTML = `
+                <div class="flex justify-between items-center w-full">
+                    <div>
+                        <div class="font-bold text-gray-800">${dossieAtual.SuspeitoNome} <span class="text-xs px-2 py-0.5 rounded bg-gray-200">${dossieAtual.SuspeitoStatus}</span></div>
+                        <div class="text-xs font-mono text-gray-600">CPF: ${formatarCPF(dossieAtual.SuspeitoCpf)} ${dossieAtual.SuspeitoApelido ? `| Vulgo: ${dossieAtual.SuspeitoApelido}` : ''}</div>
+                    </div>
+                    <button onclick="enviarEntidadeParaMural('SUSPEITO', ${dossieAtual.CodSuspeito})" class="btn-action btn-mural text-xs"><i class="fa-solid fa-thumbtack"></i> Pro Mural</button>
+                </div>
+            `;
+        }
+
+        function renderizarEvidenciasDossie(aberta) {
+            const cont = document.getElementById('container-evidences');
+            if (!dossieAtual.evidencias || dossieAtual.evidencias.length === 0) {
+                cont.innerHTML = '<p class="text-sm text-gray-500 italic">Nenhuma evidência associada.</p>';
+                return;
+            }
+            cont.innerHTML = dossieAtual.evidencias.map(ev => `
+                <div class="crud-card flex justify-between items-center">
+                    <div>
+                        <div class="font-bold text-sm text-gray-800">${ev.Protocolo} — ${ev.Tipo} <span class="text-xs px-2 py-0.5 rounded bg-gray-200">${ev.Status}</span></div>
+                        <div class="text-xs text-gray-600">${ev.Descricao} (${ev.LocalColeta})</div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="enviarEntidadeParaMural('EVIDENCIA', ${ev.Id})" class="btn-action btn-mural text-xs"><i class="fa-solid fa-thumbtack"></i> Pro Mural</button>
+                        ${aberta ? `<button onclick="desvincularEvidenciaDossie(${ev.Id})" class="btn-action btn-delete text-xs">Desvincular</button>` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function vincularEvidenciaAoDossie() {
+            const evId = Number(document.getElementById('dossie-select-evidencia').value);
+            if (!evId) return;
+            const ev = listaEvidencias.find(e => e.Id === evId);
+            if (ev) {
+                dossieAtual.evidencias.push(ev);
+                abrirPastaDossieRenderLocal();
+            }
+        }
+
+        function desvincularEvidenciaDossie(evId) {
+            dossieAtual.evidencias = dossieAtual.evidencias.filter(e => e.Id !== evId);
+            abrirPastaDossieRenderLocal();
+        }
+
+        function abrirPastaDossieRenderLocal() {
+            const selEv = document.getElementById('dossie-select-evidencia');
+            const evAtivas = listaEvidencias.filter(e => e.Status === 'ATIVO' && !dossieAtual.evidencias.some(v => v.Id === e.Id));
+            selEv.innerHTML = '<option value="">Selecione uma evidência ATIVA...</option>' +
+                evAtivas.map(e => `<option value="${e.Id}">${e.Protocolo} (${e.Tipo}) — ${e.Descricao}</option>`).join('');
+            renderizarEvidenciasDossie(dossieAtual.Status === 'ABERTA');
+        }
+
+        async function salvarDossieAtual() {
+            const selSuspVal = document.getElementById('dossie-select-suspeito').value;
+            const res = await api(`/api/investigacoes/${dossieAtual.Id}`, {
+                method: 'PUT',
+                body: JSON.stringify({
+                    titulo: document.getElementById('draft-title').value,
+                    caixa: Number(document.getElementById('draft-box').value),
+                    codInvestigador: Number(document.getElementById('dossie-select-responsavel').value),
+                    codSuspeito: selSuspVal ? Number(selSuspVal) : null,
+                    evidenciasIds: dossieAtual.evidencias.map(e => e.Id)
+                })
+            });
+            showMessage(res.mensagem, res.codigo);
+            await abrirPastaDossie(dossieAtual.Id);
+        }
+
+        async function encerrarCaso(acao) {
+            const justificativa = prompt(`Informe a justificativa obrigatória para ${acao === 'concluir' ? 'CONCLUIR' : 'CANCELAR'} a investigação:`);
+            if (justificativa === null) return;
+            const res = await api(`/api/investigacoes/${dossieAtual.Id}/${acao}`, {
+                method: 'PATCH',
+                body: JSON.stringify({ justificativa })
+            });
+            showMessage(res.mensagem, res.codigo);
+            await abrirPastaDossie(dossieAtual.Id);
+        }
+
+        async function excluirInvestigacaoAtual() {
+            if (!confirm('Atenção: exclusão física permanente da investigação e seu histórico. Confirmar?')) return;
+            const res = await api(`/api/investigacoes/${dossieAtual.Id}`, { method: 'DELETE' });
+            showMessage(res.mensagem, res.codigo);
+            dossieAtual = null;
+            switchView('view-archive');
+        }
+
+        // --- MURAL PERSISTIDO NO SQLITE (RF020) ---
+        const muralArea = document.getElementById('view-mural');
+        const canvas = document.getElementById('draw-layer');
+        const ctx = canvas.getContext('2d');
+        let activeElement = null, offsetX = 0, offsetY = 0, zIndexCounter = 100;
+        let currentTool = null, threadStartNode = null, isDrawing = false, tracoAtual = [];
+
+        async function carregarMural() {
+            const dados = await api('/api/mural');
+            const area = document.getElementById('mural-dynamic-area');
+            area.innerHTML = '';
+
+            dados.itens.forEach(item => renderizarItemMuralDOM(item));
+
+            const svg = document.getElementById('svg-layer');
+            svg.innerHTML = '';
+            dados.conexoes.forEach(c => {
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.dataset.source = `mural_item_${c.CodItemOrigem}`;
+                line.dataset.target = `mural_item_${c.CodItemDestino}`;
+                line.setAttribute('stroke', '#ef4444');
+                line.setAttribute('stroke-width', '3');
+                line.setAttribute('stroke-dasharray', '8,4');
+                svg.appendChild(line);
+            });
+            updateThreads();
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            dados.desenhos.forEach(d => {
+                const pts = JSON.parse(d.Coordenadas || '[]');
+                if (pts.length > 1) {
+                    ctx.beginPath();
+                    ctx.moveTo(pts[0].x, pts[0].y);
+                    ctx.strokeStyle = d.Cor || 'rgba(239, 68, 68, 0.85)';
+                    ctx.lineWidth = d.Espessura || 4;
+                    ctx.lineCap = 'round';
+                    pts.forEach(p => ctx.lineTo(p.x, p.y));
+                    ctx.stroke();
+                }
+            });
+        }
+
+        function renderizarItemMuralDOM(item) {
+            const area = document.getElementById('mural-dynamic-area');
+            const el = document.createElement('div');
+            const classeTipo = item.TipoItem === 'SUSPEITO' ? 'ficha-suspeito' : item.TipoItem === 'EVIDENCIA' ? 'ficha-evidencia' : '';
+            el.className = `draggable post-it resizable ${classeTipo}`;
+            el.id = `mural_item_${item.CodItemMural}`;
+            el.dataset.codItem = item.CodItemMural;
+            el.style.left = `${item.PosicaoX}px`;
+            el.style.top = `${item.PosicaoY}px`;
+            if (item.Largura) el.style.width = `${item.Largura}px`;
+            if (item.Altura) el.style.height = `${item.Altura}px`;
+            el.style.setProperty('--rand', (item.CodItemMural % 10) / 10);
+
+            el.innerHTML = `
+                <div class="pin"></div>
+                <div class="text-[10px] font-bold uppercase tracking-wider opacity-60 mb-1">${item.TipoItem}</div>
+                <textarea class="w-full h-full bg-transparent outline-none resize-none border-none text-gray-900" style="font-family: inherit;" placeholder="Escreva...">${item.Conteudo || ''}</textarea>
+            `;
+
+            const ta = el.querySelector('textarea');
+            ta.addEventListener('blur', () => {
+                api(`/api/mural/itens/${item.CodItemMural}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ conteudo: ta.value })
+                });
+            });
+
+            area.appendChild(el);
+        }
+
+        async function addPostIt() {
+            const item = await api('/api/mural/itens', {
+                method: 'POST',
+                body: JSON.stringify({
+                    tipoItem: 'POST_IT',
+                    conteudo: '',
+                    posicaoX: Math.round(window.innerWidth / 2 - 100),
+                    posicaoY: Math.round(window.innerHeight / 2 - 100)
+                })
+            });
+            renderizarItemMuralDOM(item);
+            showMessage('Post-it salvo no mural.', 'IS_MuralItem');
+        }
+
+        async function enviarEntidadeParaMural(tipo, id) {
+            let conteudo = '';
+            let codSuspeito = null, codEvidencia = null;
+            if (tipo === 'SUSPEITO') {
+                const s = listaSuspeitos.find(x => x.Id === id);
+                if (!s) return;
+                codSuspeito = s.Id;
+                conteudo = `${s.Nome}${s.Apelido ? ` ("${s.Apelido}")` : ''}\nCPF: ${formatarCPF(s.Cpf)}\nStatus: ${s.Status}`;
+            } else {
+                const e = listaEvidencias.find(x => x.Id === id);
+                if (!e) return;
+                codEvidencia = e.Id;
+                conteudo = `${e.Protocolo} [${e.Tipo}]\n${e.Descricao}\nLocal: ${e.LocalColeta}`;
+            }
+
+            await api('/api/mural/itens', {
+                method: 'POST',
+                body: JSON.stringify({
+                    tipoItem: tipo,
+                    conteudo,
+                    codSuspeito,
+                    codEvidencia,
+                    posicaoX: Math.round(window.innerWidth / 2 - 100 + (Math.random() * 80 - 40)),
+                    posicaoY: Math.round(window.innerHeight / 2 - 100 + (Math.random() * 80 - 40))
+                })
+            });
+            fecharModal('modal-cadastros');
+            switchView('view-mural');
+            showMessage('Cópia enviada para o mural individual.', 'IS_ProMural');
+        }
+
+        function toggleTool(tool) {
+            ['delete', 'pen', 'thread'].forEach(t => document.getElementById(`tool-${t}`).classList.remove('active'));
+            muralArea.classList.remove('delete-mode', 'thread-mode');
+
+            if (currentTool === tool) {
+                currentTool = null;
+                canvas.style.pointerEvents = 'none';
+            } else {
+                currentTool = tool;
+                document.getElementById(`tool-${tool}`).classList.add('active');
+                if (tool === 'delete') muralArea.classList.add('delete-mode');
+                if (tool === 'thread') muralArea.classList.add('thread-mode');
+                canvas.style.pointerEvents = tool === 'pen' ? 'auto' : 'none';
+            }
+            threadStartNode = null;
+        }
+
+        muralArea.addEventListener('mousedown', async (e) => {
+            const draggable = e.target.closest('.draggable');
+            if (!draggable || e.button !== 0) return;
+
+            if (e.target.tagName.toLowerCase() === 'textarea' || (e.offsetX > draggable.clientWidth - 20 && e.offsetY > draggable.clientHeight - 20)) {
+                return;
+            }
+
+            const codItem = Number(draggable.dataset.codItem);
+
+            if (currentTool === 'delete') {
+                await api(`/api/mural/itens/${codItem}`, { method: 'DELETE' });
+                document.querySelectorAll(`#svg-layer line[data-source="${draggable.id}"], #svg-layer line[data-target="${draggable.id}"]`).forEach(l => l.remove());
+                draggable.remove();
+                return;
+            }
+
+            if (currentTool === 'thread') {
+                if (!threadStartNode) {
+                    threadStartNode = draggable;
+                    showMessage('Selecione o segundo item para conectar.', 'IS_Fio');
+                } else if (threadStartNode !== draggable) {
+                    const origId = Number(threadStartNode.dataset.codItem);
+                    await api('/api/mural/conexoes', {
+                        method: 'POST',
+                        body: JSON.stringify({ codItemOrigem: origId, codItemDestino: codItem })
+                    });
+                    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    line.dataset.source = threadStartNode.id;
+                    line.dataset.target = draggable.id;
+                    line.setAttribute('stroke', '#ef4444');
+                    line.setAttribute('stroke-width', '3');
+                    line.setAttribute('stroke-dasharray', '8,4');
+                    document.getElementById('svg-layer').appendChild(line);
+                    updateThreads();
+                    threadStartNode = null;
+                    toggleTool(null);
+                }
+                return;
+            }
+
+            activeElement = draggable;
+            zIndexCounter++;
+            activeElement.style.zIndex = zIndexCounter;
+            const rect = activeElement.getBoundingClientRect();
+            offsetX = e.clientX - rect.left;
+            offsetY = e.clientY - rect.top;
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (activeElement) {
+                activeElement.style.left = `${e.clientX - offsetX}px`;
+                activeElement.style.top = `${e.clientY - offsetY}px`;
+                updateThreads();
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (activeElement) {
+                const codItem = Number(activeElement.dataset.codItem);
+                api(`/api/mural/itens/${codItem}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        posicaoX: parseInt(activeElement.style.left, 10),
+                        posicaoY: parseInt(activeElement.style.top, 10),
+                        largura: activeElement.offsetWidth,
+                        altura: activeElement.offsetHeight
+                    })
+                });
+                activeElement = null;
+            }
+        });
+
+        function updateThreads() {
+            document.querySelectorAll('#svg-layer line').forEach(line => {
+                const el1 = document.getElementById(line.dataset.source);
+                const el2 = document.getElementById(line.dataset.target);
+                if (el1 && el2) {
+                    const r1 = el1.getBoundingClientRect();
+                    const r2 = el2.getBoundingClientRect();
+                    line.setAttribute('x1', r1.left + r1.width / 2);
+                    line.setAttribute('y1', r1.top + 15);
+                    line.setAttribute('x2', r2.left + r2.width / 2);
+                    line.setAttribute('y2', r2.top + 15);
+                } else {
+                    line.remove();
+                }
+            });
+        }
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            if (usuarioAtual) carregarMural();
+        }
+        window.addEventListener('resize', resizeCanvas);
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (currentTool !== 'pen') return;
+            isDrawing = true;
+            tracoAtual = [{ x: e.clientX, y: e.clientY }];
+            ctx.beginPath();
+            ctx.moveTo(e.clientX, e.clientY);
+            ctx.strokeStyle = 'rgba(239, 68, 68, 0.85)';
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDrawing) return;
+            tracoAtual.push({ x: e.clientX, y: e.clientY });
+            ctx.lineTo(e.clientX, e.clientY);
+            ctx.stroke();
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            if (isDrawing && tracoAtual.length > 1) {
+                api('/api/mural/desenhos', {
+                    method: 'POST',
+                    body: JSON.stringify({ coordenadas: tracoAtual })
+                });
+            }
+            isDrawing = false;
+            tracoAtual = [];
+        });
+
+        async function clearCanvas() {
+            await api('/api/mural/limpar', { method: 'DELETE' });
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            document.getElementById('svg-layer').innerHTML = '';
+            showMessage('Desenhos e fios removidos do mural.', 'IS_LimparMural');
+            toggleTool(null);
+        }
+
+        // --- EVIDÊNCIA DO BANCO DE DADOS (PRINT) ---
+        async function abrirAuditoriaBD() {
+            const dados = await api('/api/auditoria');
+            document.getElementById('auditoria-meta').innerText =
+                `Arquivo: ${dados.bancoDados} | Usuário Logado: ${dados.sessaoAtiva.nome} (${dados.sessaoAtiva.email}) | Consulta: ${dados.timestamp}`;
+
+            const cont = document.getElementById('auditoria-conteudo');
+            cont.innerHTML = Object.entries(dados.tabelas).map(([tabela, rows]) => `
+                <div class="bg-gray-800 border border-gray-700 rounded p-3">
+                    <div class="text-yellow-400 font-bold mb-1">TABELA: ${tabela} (${rows.length} registro(s))</div>
+                    <pre class="overflow-x-auto text-emerald-300">${JSON.stringify(rows, null, 2)}</pre>
+                </div>
+            `).join('');
+
+            document.getElementById('modal-auditoria').classList.remove('hidden-view');
+        }
+    </script>
+</body>
+</html>
