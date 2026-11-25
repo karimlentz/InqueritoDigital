@@ -1,0 +1,93 @@
+# Padrões de Codificação — Projeto Inquérito Digital
+
+**Projeto:** Inquérito Digital — GCC 188 (2026-2)  
+**Localização:** `docs/padroes/Padroes_de_Codificacao.md`
+
+Este documento estabelece as regras objetivas de codificação que todos os integrantes da equipe devem seguir e verificar durante as revisões de *Pull Request* nas pastas `src/`, `public/` e `tests/`.
+
+---
+
+## Regra C1 — Padrão de Notação e Nomenclatura *(Obrigatória)*
+
+Todo identificador criado no código-fonte deve seguir rigorosamente a convenção definida na tabela abaixo, utilizando nomes autoexplicativos em português (alinhados ao Dicionário de Dados) e proibindo abreviações crípticas (como `aux`, `tmp`, `sus`, `ev`), exceto índices de laços curtos (`i`, `j`):
+
+| Elemento de Código | Padrão Adotado | Exemplo Válido | Exemplo Proibido |
+| :--- | :--- | :--- | :--- |
+| **Variáveis, funções e métodos** | `camelCase` | `buscarSuspeitoPorId()`, `cpfLimpo` | `Buscar_Suspeito()`, `cpflimpo` |
+| **Arquivos JavaScript** | `camelCase.js` | `suspeitoRepository.js`, `cpfValidator.js` | `Suspeito_Repo.js`, `validador.js` |
+| **Classes e Entidades de Domínio** | `PascalCase` | `Investigador`, `HistoricoResponsavel` | `investigador`, `historico_resp` |
+| **Constantes e Enums** | `UPPER_SNAKE_CASE` | `STATUS_INVESTIGACAO`, `MENSAGENS_SISTEMA` | `statusInvestigacao`, `msgs` |
+| **Rotas REST e classes/IDs CSS** | `kebab-case` | `/api/suspeitos`, `#btn-salvar-suspeito` | `/api/buscarSuspeitos`, `#btnSalvar` |
+| **Tabelas e Colunas SQL** | `PascalCase` | `Suspeito`, `DataCadastro`, `NumeroInquerito` | `suspeitos`, `data_cadastro` |
+
+* **Critério de verificação:** inspeção nos arquivos modificados durante a revisão do *Pull Request*; qualquer identificador fora da tabela acima invalida a aprovação do PR.
+
+---
+
+## Regra C2 — Documentação e Comentários de Código *(Obrigatória — Clean Code)*
+
+A documentação interna do código segue o princípio do **Clean Code** de que *"o código deve explicar o que faz, e os comentários devem explicar apenas o porquê"*:
+
+* **Documentação de interface (JSDoc obrigatório):** toda função pública, rota HTTP ou método de repositório deve possuir um bloco `/** ... */` imediatamente acima da assinatura descrevendo sua finalidade, parâmetros (`@param`), retorno (`@returns`) e exceções (`@throws`).
+* **Proibição de comentários óbvios:** é proibido inserir comentários dentro de funções que apenas repitam a sintaxe da linha (ex.: `// soma 1 ao contador` em `contador++`).
+* **Comentários de regra de negócio:** comentários internos (`//`) devem ser usados exclusivamente para justificar decisões não triviais (ex.: cálculo dos dígitos verificadores do CPF ou regra de inativação em vez de exclusão física).
+* **Proibição de código comentado:** nenhum trecho de código antigo comentado pode permanecer nos commits; versões anteriores ficam registradas no histórico do Git.
+
+---
+
+## Regra C3 — Princípio da Responsabilidade Única — SRP *(SOLID)*
+
+Cada módulo ou arquivo do sistema deve possuir **uma única responsabilidade e uma única razão para mudar**, respeitando a divisão arquitetural do projeto:
+
+* **`routes/` e `controllers/`:** apenas recebem requisições HTTP, extraem parâmetros (`req.body`, `req.params`) e devolvem respostas JSON com status HTTP semântico (`200`, `201`, `400`, `401`, `404`, `409`).
+* **`services/` e `utils/`:** contêm exclusivamente regras de negócio e validações puras (ex.: `validarCpf`), sem manipular objetos HTTP (`req`/`res`) nem executar comandos SQL.
+* **`repositories/`:** contêm exclusivamente comandos de leitura e escrita no banco SQLite.
+* **Critério de verificação:** é proibido escrever instruções SQL (`SELECT`, `INSERT`, `UPDATE`, `DELETE`) dentro de arquivos de rota, controlador ou interface HTML/JS.
+
+---
+
+## Regra C4 — Funções Curtas e Poucos Argumentos *(Clean Code / Princípio SOFA)*
+
+Baseado no mnemônico **SOFA** (*Short, One thing, Few arguments, Abstraction level consistency*):
+
+* **Tamanho máximo:** cada função ou método deve executar uma única tarefa e conter no máximo **30 linhas** de código executável (excluindo o bloco JSDoc e linhas em branco). Funções maiores devem ser decompostas em funções auxiliares privadas.
+* **Limite de parâmetros:** cada função deve aceitar no máximo **3 parâmetros**. Quando uma operação exigir mais de 3 dados (como o cadastro de uma investigação ou suspeito), os valores devem ser agrupados em um único objeto estruturado (ex.: `cadastrarSuspeito(dadosSuspeito)`).
+
+---
+
+## Regra C5 — Princípio Aberto-Fechado (OCP) e Inversão de Dependência (DIP) *(SOLID)*
+
+Para evitar acoplamento rígido e facilitar os testes unitários:
+
+* **Eliminação de *Magic Strings* (OCP):** valores de domínio fechados — como status de cadastro (`'ATIVO'`, `'INATIVO'`), status de investigação (`'ABERTA'`, `'CANCELADA'`, `'CONCLUIDA'`) e tipos de evidência — devem ser centralizados em objetos constantes congelados (`Object.freeze(...)`), nunca repetidos como texto solto em `if` ou queries.
+* **Injeção de Dependência (DIP):** funções de regra de negócio (`services`) e repositórios (`repositories`) devem receber a instância da conexão do banco (`db`) por parâmetro ou módulo injetável, em vez de abrir novas conexões (`new Database(...)`) internamente. Isso permite executar testes unitários isolados em banco em memória (`:memory:`).
+
+---
+
+## Regra C6 — Retorno Antecipado (*Guard Clauses*) e Tratamento de Erros *(Clean Code)*
+
+Para evitar código aninhado de difícil leitura (*Arrow Anti-Pattern* / *Bad Smell*) e garantir respostas previsíveis:
+
+* **Aninhamento máximo:** nenhuma função deve ultrapassar **2 níveis de indentação** (`if` dentro de `if` dentro de `for`). Validações de erro devem ocorrer no início da função usando retorno antecipado (*Guard Clauses*).
+* **Tratamento explícito de exceções:** é proibido deixar blocos `catch (erro) {}` vazios. Todo erro capturado deve ser tratado e convertido em uma resposta padronizada da aplicação (`IE_*`) com o código HTTP correspondente (`4xx` ou `500`), nunca expondo *stack traces* internos ao usuário final.
+
+---
+
+## Regra C7 — Segurança e Prevenção de *Bad Smells* na Persistência
+
+Como o sistema manipula dados sensíveis de investigações criminais e utiliza SQLite (`better-sqlite3`):
+
+* **Queries parametrizadas obrigatórias:** toda consulta ao banco de dados deve utilizar *prepared statements* com parâmetros posicionais (`?`) ou nomeados (`@campo`). É **terminantemente proibida** a concatenação ou interpolação de variáveis (`+` ou `${}`) na construção de strings SQL, prevenindo vulnerabilidades de *SQL Injection*.
+* **Proteção de credenciais:** senhas de investigadores devem ser convertidas em hash **BCrypt** antes da persistência e nunca podem ser exibidas em `console.log()` ou retornadas nas respostas JSON da API.
+
+---
+
+## Regra C8 — Formatação, Indentação e Limite de Linha *(Legibilidade)*
+
+Para evitar conflitos artificiais de *merge* no Git e manter aparência uniforme entre todos os integrantes da equipe:
+
+* **Indentação:** **2 espaços** por nível (proibido usar caractere *Tab*).
+* **Pontuação e strings:** uso obrigatório de ponto e vírgula (`;`) ao final das instruções e aspas simples (`'`) para strings em JavaScript (exceto *template literals* quando necessário).
+* **Largura máxima:** cada linha de código deve ter no máximo **100 caracteres**, quebrando expressões ou listas de parâmetros longas em múltiplas linhas.
+
+---
