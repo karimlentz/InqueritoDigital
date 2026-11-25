@@ -338,3 +338,332 @@ app.put('/api/evidencias/:id', exigirSessao, (req, res) => {
     const atualizada = db.prepare('SELECT * FROM Evidencia WHERE Id = ?').get(id);
     res.json({ codigo: 'IS_AlteracaoEvidencia', mensagem: 'Evidência atualizada com sucesso.', dado: atualizada });
 });
+
+app.patch('/api/evidencias/:id/inativar', exigirSessao, (req, res) => {
+    const id = Number(req.params.id);
+    const vinculos = db.prepare('SELECT COUNT(*) AS c FROM InvestigacaoEvidencia WHERE CodEvidencia = ?').get(id).c;
+    if (vinculos === 0) {
+        return res.status(400).json({
+            codigo: 'IE_EvidenciaSemVinculo',
+            mensagem: 'A inativação só é permitida quando há vínculo com investigação.'
+        });
+    }
+    db.prepare("UPDATE Evidencia SET Status = 'INATIVO' WHERE Id = ?").run(id);
+    res.json({ codigo: 'IS_InativacaoEvidencia', mensagem: 'Evidência inativada com sucesso.' });
+});
+
+app.delete('/api/evidencias/:id', exigirSessao, (req, res) => {
+    const id = Number(req.params.id);
+    const vinculos = db.prepare('SELECT COUNT(*) AS c FROM InvestigacaoEvidencia WHERE CodEvidencia = ?').get(id).c;
+    if (vinculos > 0) {
+        return res.status(400).json({
+            codigo: 'IE_EvidenciaVinculada',
+            mensagem: 'Evidência vinculada a investigação não pode ser excluída fisicamente.'
+        });
+    }
+    db.prepare('DELETE FROM Evidencia WHERE Id = ?').run(id);
+    res.json({ codigo: 'IS_ExclusaoEvidencia', mensagem: 'Evidência excluída permanentemente.' });
+});
+
+// 4. INVESTIGAÇÕES & HISTÓRICO (RF013 – RF019)
+function montarDossie(id) {
+    const inv = db.prepare(`
+        SELECT i.*,
+               r.Nome AS ResponsavelNome, r.Unidade AS ResponsavelUnidade,
+               s.Nome AS SuspeitoNome, s.Cpf AS SuspeitoCpf, s.Apelido AS SuspeitoApelido, s.Status AS SuspeitoStatus
+        FROM Investigacao i
+        JOIN Investigador r ON r.Id = i.CodInvestigador
+        LEFT JOIN Suspeito s ON s.Id = i.CodSuspeito
+        WHERE i.Id = ?
+    `).get(id);
+    if (!inv) return null;
+
+    inv.evidencias = db.prepare(`
+        SELECT e.*
+        FROM Evidencia e
+        JOIN InvestigacaoEvidencia ie ON ie.CodEvidencia = e.Id
+        WHERE ie.CodInvestigacao = ?
+    `).all(id);
+
+    inv.historico = db.prepare(`
+        SELECT h.*, r.Nome AS InvestigadorNome, r.Unidade
+        FROM HistoricoResponsavel h
+        JOIN Investigador r ON r.Id = h.CodInvestigador
+        WHERE h.CodInvestigacao = ?
+        ORDER BY h.Id ASC
+    `).all(id);
+
+    return inv;
+}
+
+app.get('/api/investigacoes', exigirSessao, (req, res) => {
+    const rows = db.prepare('SELECT Id FROM Investigacao ORDER BY Id ASC').all();
+    res.json(rows.map(r => montarDossie(r.Id)));
+});
+
+app.get('/api/investigacoes/:id', exigirSessao, (req, res) => {
+    const dossie = montarDossie(Number(req.params.id));
+    if (!dossie) return res.status(404).json({ codigo: 'IE_InvestigacaoNaoEncontrada', mensagem: 'Investigação não encontrada.' });
+    res.json(dossie);
+});
+
+app.post('/api/investigacoes', exigirSessao, (req, res) => {
+    const { numeroInquerito, titulo, codInvestigador, codSuspeito, evidenciasIds = [], caixa = 1 } = req.body;
+    const respId = Number(codInvestigador || req.session.investigador.id);
+
+    if (!numeroInquerito?.trim() || !titulo?.trim() || !respId) {
+        return res.status(400).json({
+            codigo: 'IE_CamposObrigatorios',
+            mensagem: 'Número do inquérito, título e investigador responsável são obrigatórios.'
+        });
+    }
+
+    const dup = db.prepare('SELECT Id FROM Investigacao WHERE UPPER(NumeroInquerito) = UPPER(?)').get(numeroInquerito.trim());
+    if (dup) {
+        return res.status(409).json({
+            codigo: 'IE_InvestigacaoDuplicada',
+            mensagem: 'Já existe investigação com este número de inquérito.'
+        });
+    }
+
+    if (codSuspeito) {
+        const susp = db.prepare('SELECT Status FROM Suspeito WHERE Id = ?').get(Number(codSuspeito));
+        if (!susp || susp.Status !== 'ATIVO') {
+            return res.status(400).json({ codigo: 'IE_SuspeitoInativo', mensagem: 'Apenas suspeitos ATIVOS podem ser vinculados.' });
+        }
+    }
+
+    for (const evId of evidenciasIds) {
+        const ev = db.prepare('SELECT Protocolo, Status FROM Evidencia WHERE Id = ?').get(Number(evId));
+        if (!ev || ev.Status !== 'ATIVO') {
+            return res.status(400).json({ codigo: 'IE_EvidenciaInativa', mensagem: 'Apenas evidências ATIVAS podem ser vinculadas.' });
+        }
+        const conflito = db.prepare(`
+            SELECT i.NumeroInquerito FROM InvestigacaoEvidencia ie
+            JOIN Investigacao i ON i.Id = ie.CodInvestigacao
+            WHERE ie.CodEvidencia = ? AND i.Status = 'ABERTA'
+        `).get(Number(evId));
+        if (conflito) {
+            return res.status(409).json({
+                codigo: 'IE_EvidenciaVinculada',
+                mensagem: `Evidência ${ev.Protocolo} já está vinculada ao caso aberto ${conflito.NumeroInquerito}.`
+            });
+        }
+    }
+
+    const tx = db.transaction(() => {
+        const resInv = db.prepare(`
+            INSERT INTO Investigacao (NumeroInquerito, Titulo, Status, CodInvestigador, CodSuspeito, Caixa)
+            VALUES (?, ?, 'ABERTA', ?, ?, ?)
+        `).run(numeroInquerito.trim().toUpperCase(), titulo.trim(), respId, codSuspeito ? Number(codSuspeito) : null, Number(caixa) === 2 ? 2 : 1);
+
+        const invId = resInv.lastInsertRowid;
+        const insEv = db.prepare('INSERT INTO InvestigacaoEvidencia (CodInvestigacao, CodEvidencia) VALUES (?, ?)');
+        for (const evId of evidenciasIds) insEv.run(invId, Number(evId));
+
+        db.prepare('INSERT INTO HistoricoResponsavel (CodInvestigacao, CodInvestigador) VALUES (?, ?)').run(invId, respId);
+        return invId;
+    });
+
+    const novoId = tx();
+    res.status(201).json({
+        codigo: 'IS_RegistroInvestigacao',
+        mensagem: 'Investigação registrada com sucesso.',
+        dado: montarDossie(novoId)
+    });
+});
+
+app.put('/api/investigacoes/:id', exigirSessao, (req, res) => {
+    const id = Number(req.params.id);
+    const atual = db.prepare('SELECT * FROM Investigacao WHERE Id = ?').get(id);
+    if (!atual) return res.status(404).json({ codigo: 'IE_InvestigacaoNaoEncontrada', mensagem: 'Investigação não encontrada.' });
+    if (atual.Status !== 'ABERTA') {
+        return res.status(400).json({ codigo: 'IE_InvestigacaoEncerrada', mensagem: 'Investigações concluídas ou canceladas não podem ser alteradas.' });
+    }
+
+    const { titulo, codInvestigador, codSuspeito, evidenciasIds = [], caixa = 1 } = req.body;
+    const novoRespId = Number(codInvestigador || atual.CodInvestigador);
+
+    if (!titulo?.trim() || !novoRespId) {
+        return res.status(400).json({ codigo: 'IE_CamposObrigatorios', mensagem: 'Título e responsável são obrigatórios.' });
+    }
+
+    for (const evId of evidenciasIds) {
+        const conflito = db.prepare(`
+            SELECT i.NumeroInquerito, e.Protocolo FROM InvestigacaoEvidencia ie
+            JOIN Investigacao i ON i.Id = ie.CodInvestigacao
+            JOIN Evidencia e ON e.Id = ie.CodEvidencia
+            WHERE ie.CodEvidencia = ? AND i.Status = 'ABERTA' AND i.Id != ?
+        `).get(Number(evId), id);
+        if (conflito) {
+            return res.status(409).json({
+                codigo: 'IE_EvidenciaVinculada',
+                mensagem: `Evidência ${conflito.Protocolo} já está vinculada ao caso aberto ${conflito.NumeroInquerito}.`
+            });
+        }
+    }
+
+    const tx = db.transaction(() => {
+        db.prepare(`
+            UPDATE Investigacao SET Titulo = ?, CodInvestigador = ?, CodSuspeito = ?, Caixa = ?
+            WHERE Id = ?
+        `).run(titulo.trim(), novoRespId, codSuspeito ? Number(codSuspeito) : null, Number(caixa) === 2 ? 2 : 1, id);
+
+        if (novoRespId !== atual.CodInvestigador) {
+            db.prepare('UPDATE HistoricoResponsavel SET DataFim = CURRENT_TIMESTAMP WHERE CodInvestigacao = ? AND DataFim IS NULL').run(id);
+            db.prepare('INSERT INTO HistoricoResponsavel (CodInvestigacao, CodInvestigador) VALUES (?, ?)').run(id, novoRespId);
+        }
+
+        db.prepare('DELETE FROM InvestigacaoEvidencia WHERE CodInvestigacao = ?').run(id);
+        const insEv = db.prepare('INSERT INTO InvestigacaoEvidencia (CodInvestigacao, CodEvidencia) VALUES (?, ?)');
+        for (const evId of evidenciasIds) insEv.run(id, Number(evId));
+    });
+
+    tx();
+    res.json({ codigo: 'IS_AtualizacaoInvestigacao', mensagem: 'Caso atualizado com sucesso.', dado: montarDossie(id) });
+});
+
+app.patch('/api/investigacoes/:id/cancelar', exigirSessao, (req, res) => {
+    const id = Number(req.params.id);
+    const { justificativa } = req.body;
+    if (!justificativa?.trim()) {
+        return res.status(400).json({ codigo: 'IE_CancelamentoInvestigacaoJustificativa', mensagem: 'Justificativa é obrigatória para cancelar.' });
+    }
+    db.prepare(`
+        UPDATE Investigacao SET Status = 'CANCELADA', Justificativa = ?, DataFechamento = CURRENT_TIMESTAMP
+        WHERE Id = ? AND Status = 'ABERTA'
+    `).run(justificativa.trim(), id);
+    res.json({ codigo: 'IS_CancelamentoInvestigacao', mensagem: 'Investigação cancelada com sucesso.', dado: montarDossie(id) });
+});
+
+app.patch('/api/investigacoes/:id/concluir', exigirSessao, (req, res) => {
+    const id = Number(req.params.id);
+    const { justificativa } = req.body;
+    if (!justificativa?.trim()) {
+        return res.status(400).json({ codigo: 'IE_ConclusaoInvestigacaoJustificativa', mensagem: 'Justificativa é obrigatória para concluir.' });
+    }
+    db.prepare(`
+        UPDATE Investigacao SET Status = 'CONCLUIDA', Justificativa = ?, DataFechamento = CURRENT_TIMESTAMP
+        WHERE Id = ? AND Status = 'ABERTA'
+    `).run(justificativa.trim(), id);
+    res.json({ codigo: 'IS_ConclusaoInvestigacao', mensagem: 'Investigação concluída com sucesso.', dado: montarDossie(id) });
+});
+
+app.delete('/api/investigacoes/:id', exigirSessao, (req, res) => {
+    const id = Number(req.params.id);
+    const existe = db.prepare('SELECT Id FROM Investigacao WHERE Id = ?').get(id);
+    if (!existe) return res.status(404).json({ codigo: 'IE_InvestigacaoNaoEncontrada', mensagem: 'Investigação não encontrada.' });
+
+    const tx = db.transaction(() => {
+        db.prepare('DELETE FROM InvestigacaoEvidencia WHERE CodInvestigacao = ?').run(id);
+        db.prepare('DELETE FROM HistoricoResponsavel WHERE CodInvestigacao = ?').run(id);
+        db.prepare('DELETE FROM Investigacao WHERE Id = ?').run(id);
+    });
+    tx();
+    res.json({ codigo: 'IS_ExclusaoInvestigacao', mensagem: 'Investigação excluída com sucesso.' });
+});
+
+// 5. MURAL INDIVIDUAL (RF020)
+function obterMuralDoUsuario(invId) {
+    let mural = db.prepare('SELECT * FROM Mural WHERE CodInvestigador = ?').get(invId);
+    if (!mural) {
+        const res = db.prepare('INSERT INTO Mural (CodInvestigador) VALUES (?)').run(invId);
+        mural = { CodMural: res.lastInsertRowid, CodInvestigador: invId };
+    }
+    return mural;
+}
+
+app.get('/api/mural', exigirSessao, (req, res) => {
+    const mural = obterMuralDoUsuario(req.session.investigador.id);
+    const itens = db.prepare('SELECT * FROM ItemMural WHERE CodMural = ? ORDER BY OrdemCamada ASC').all(mural.CodMural);
+    const conexoes = db.prepare(`
+        SELECT c.* FROM ConexaoMural c
+        JOIN ItemMural i ON i.CodItemMural = c.CodItemOrigem
+        WHERE i.CodMural = ?
+    `).all(mural.CodMural);
+    const desenhos = db.prepare('SELECT * FROM DesenhoMural WHERE CodMural = ?').all(mural.CodMural);
+    res.json({ mural, itens, conexoes, desenhos });
+});
+
+app.post('/api/mural/itens', exigirSessao, (req, res) => {
+    const mural = obterMuralDoUsuario(req.session.investigador.id);
+    const { tipoItem = 'POST_IT', conteudo = '', codSuspeito = null, codEvidencia = null, posicaoX = 300, posicaoY = 200, rotacao = 0 } = req.body;
+    const info = db.prepare(`
+        INSERT INTO ItemMural (CodMural, TipoItem, Conteudo, CodSuspeito, CodEvidencia, PosicaoX, PosicaoY, Rotacao, OrdemCamada)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 25)
+    `).run(mural.CodMural, tipoItem, conteudo, codSuspeito, codEvidencia, posicaoX, posicaoY, rotacao);
+
+    const item = db.prepare('SELECT * FROM ItemMural WHERE CodItemMural = ?').get(info.lastInsertRowid);
+    res.status(201).json(item);
+});
+
+app.put('/api/mural/itens/:id', exigirSessao, (req, res) => {
+    const id = Number(req.params.id);
+    const { conteudo, posicaoX, posicaoY, largura, altura, ordemCamada } = req.body;
+    db.prepare(`
+        UPDATE ItemMural
+        SET Conteudo = COALESCE(?, Conteudo),
+            PosicaoX = COALESCE(?, PosicaoX),
+            PosicaoY = COALESCE(?, PosicaoY),
+            Largura = COALESCE(?, Largura),
+            Altura = COALESCE(?, Altura),
+            OrdemCamada = COALESCE(?, OrdemCamada)
+        WHERE CodItemMural = ?
+    `).run(conteudo ?? null, posicaoX ?? null, posicaoY ?? null, largura ?? null, altura ?? null, ordemCamada ?? null, id);
+    res.json({ ok: true });
+});
+
+app.delete('/api/mural/itens/:id', exigirSessao, (req, res) => {
+    db.prepare('DELETE FROM ItemMural WHERE CodItemMural = ?').run(Number(req.params.id));
+    res.json({ ok: true });
+});
+
+app.post('/api/mural/conexoes', exigirSessao, (req, res) => {
+    const { codItemOrigem, codItemDestino } = req.body;
+    const info = db.prepare('INSERT INTO ConexaoMural (CodItemOrigem, CodItemDestino) VALUES (?, ?)').run(codItemOrigem, codItemDestino);
+    res.status(201).json({ CodConexao: info.lastInsertRowid, CodItemOrigem: codItemOrigem, CodItemDestino: codItemDestino });
+});
+
+app.post('/api/mural/desenhos', exigirSessao, (req, res) => {
+    const mural = obterMuralDoUsuario(req.session.investigador.id);
+    const { coordenadas, cor = '#ef4444', espessura = 4 } = req.body;
+    const info = db.prepare('INSERT INTO DesenhoMural (CodMural, Coordenadas, Cor, Espessura) VALUES (?, ?, ?, ?)').run(
+        mural.CodMural, JSON.stringify(coordenadas), cor, espessura
+    );
+    res.status(201).json({ CodDesenho: info.lastInsertRowid });
+});
+
+app.delete('/api/mural/limpar', exigirSessao, (req, res) => {
+    const mural = obterMuralDoUsuario(req.session.investigador.id);
+    db.transaction(() => {
+        db.prepare('DELETE FROM DesenhoMural WHERE CodMural = ?').run(mural.CodMural);
+        db.prepare(`
+            DELETE FROM ConexaoMural WHERE CodItemOrigem IN (
+                SELECT CodItemMural FROM ItemMural WHERE CodMural = ?
+            )
+        `).run(mural.CodMural);
+    })();
+    res.json({ ok: true });
+});
+
+// 6. ROTA DE AUDITORIA DO BANCO (EVIDÊNCIA / PRINT)
+app.get('/api/auditoria', exigirSessao, (req, res) => {
+    res.json({
+        timestamp: new Date().toLocaleString('pt-BR'),
+        sessaoAtiva: req.session.investigador,
+        bancoDados: 'data/inquerito.db (SQLite)',
+        tabelas: {
+            Investigador: db.prepare('SELECT Id, Nome, Email, Matricula, Unidade FROM Investigador').all(),
+            Suspeito: db.prepare('SELECT * FROM Suspeito').all(),
+            Evidencia: db.prepare('SELECT * FROM Evidencia').all(),
+            Investigacao: db.prepare('SELECT * FROM Investigacao').all(),
+            InvestigacaoEvidencia: db.prepare('SELECT * FROM InvestigacaoEvidencia').all(),
+            HistoricoResponsavel: db.prepare('SELECT * FROM HistoricoResponsavel').all(),
+            ItemMural: db.prepare('SELECT CodItemMural, CodMural, TipoItem, Conteudo, CodSuspeito, CodEvidencia, PosicaoX, PosicaoY FROM ItemMural').all()
+        }
+    });
+});
+
+app.listen(PORT, () => {
+    console.log(`Inquérito Digital rodando em http://localhost:${PORT}`);
+});
