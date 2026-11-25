@@ -1,0 +1,105 @@
+PRAGMA foreign_keys = ON;
+
+CREATE TABLE IF NOT EXISTS Investigador (
+    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+    Nome VARCHAR(120) NOT NULL,
+    Email VARCHAR(100) NOT NULL UNIQUE,
+    Matricula VARCHAR(20) UNIQUE,
+    Unidade VARCHAR(80) NOT NULL,
+    SenhaHash CHAR(60) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS Suspeito (
+    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+    Nome VARCHAR(120) NOT NULL,
+    Cpf CHAR(11) NOT NULL UNIQUE,
+    Apelido VARCHAR(40),
+    Telefone VARCHAR(15),
+    Descricao VARCHAR(500),
+    DataCadastro DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    Status VARCHAR(8) NOT NULL DEFAULT 'ATIVO' CHECK (Status IN ('ATIVO', 'INATIVO'))
+);
+
+CREATE TABLE IF NOT EXISTS Evidencia (
+    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+    Protocolo VARCHAR(20) NOT NULL UNIQUE,
+    Tipo VARCHAR(15) NOT NULL CHECK (Tipo IN ('Armas', 'Biológico', 'Documentos', 'Veículos', 'Drogas', 'Diversos')),
+    Descricao VARCHAR(500) NOT NULL,
+    LocalColeta VARCHAR(150) NOT NULL,
+    DataColeta DATE NOT NULL,
+    Status VARCHAR(8) NOT NULL DEFAULT 'ATIVO' CHECK (Status IN ('ATIVO', 'INATIVO'))
+);
+
+CREATE TABLE IF NOT EXISTS Investigacao (
+    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+    NumeroInquerito VARCHAR(20) NOT NULL UNIQUE,
+    Titulo VARCHAR(120) NOT NULL,
+    Status VARCHAR(10) NOT NULL DEFAULT 'ABERTA' CHECK (Status IN ('ABERTA', 'CANCELADA', 'CONCLUIDA')),
+    Justificativa VARCHAR(1000),
+    DataAbertura DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    DataFechamento DATETIME,
+    CodInvestigador INTEGER NOT NULL,
+    CodSuspeito INTEGER,
+    Caixa INTEGER NOT NULL DEFAULT 1 CHECK (Caixa IN (1, 2)),
+    FOREIGN KEY (CodInvestigador) REFERENCES Investigador(Id),
+    FOREIGN KEY (CodSuspeito) REFERENCES Suspeito(Id)
+);
+
+CREATE TABLE IF NOT EXISTS InvestigacaoEvidencia (
+    CodInvestigacao INTEGER NOT NULL,
+    CodEvidencia INTEGER NOT NULL,
+    PRIMARY KEY (CodInvestigacao, CodEvidencia),
+    FOREIGN KEY (CodInvestigacao) REFERENCES Investigacao(Id) ON DELETE CASCADE,
+    FOREIGN KEY (CodEvidencia) REFERENCES Evidencia(Id)
+);
+
+CREATE TABLE IF NOT EXISTS HistoricoResponsavel (
+    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+    CodInvestigacao INTEGER NOT NULL,
+    CodInvestigador INTEGER NOT NULL,
+    DataInicio DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    DataFim DATETIME,
+    FOREIGN KEY (CodInvestigacao) REFERENCES Investigacao(Id) ON DELETE CASCADE,
+    FOREIGN KEY (CodInvestigador) REFERENCES Investigador(Id)
+);
+
+CREATE TABLE IF NOT EXISTS Mural (
+    CodMural INTEGER PRIMARY KEY AUTOINCREMENT,
+    CodInvestigador INTEGER NOT NULL UNIQUE,
+    FOREIGN KEY (CodInvestigador) REFERENCES Investigador(Id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS ItemMural (
+    CodItemMural INTEGER PRIMARY KEY AUTOINCREMENT,
+    CodMural INTEGER NOT NULL,
+    TipoItem VARCHAR(20) NOT NULL CHECK (TipoItem IN ('POST_IT', 'SUSPEITO', 'EVIDENCIA')),
+    Conteudo TEXT NOT NULL,
+    CodSuspeito INTEGER,
+    CodEvidencia INTEGER,
+    PosicaoX DECIMAL NOT NULL DEFAULT 200,
+    PosicaoY DECIMAL NOT NULL DEFAULT 200,
+    Largura DECIMAL,
+    Altura DECIMAL,
+    Rotacao DECIMAL NOT NULL DEFAULT 0,
+    OrdemCamada INTEGER NOT NULL DEFAULT 20,
+    FOREIGN KEY (CodMural) REFERENCES Mural(CodMural) ON DELETE CASCADE,
+    FOREIGN KEY (CodSuspeito) REFERENCES Suspeito(Id) ON DELETE SET NULL,
+    FOREIGN KEY (CodEvidencia) REFERENCES Evidencia(Id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS ConexaoMural (
+    CodConexao INTEGER PRIMARY KEY AUTOINCREMENT,
+    CodItemOrigem INTEGER NOT NULL,
+    CodItemDestino INTEGER NOT NULL,
+    FOREIGN KEY (CodItemOrigem) REFERENCES ItemMural(CodItemMural) ON DELETE CASCADE,
+    FOREIGN KEY (CodItemDestino) REFERENCES ItemMural(CodItemMural) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS DesenhoMural (
+    CodDesenho INTEGER PRIMARY KEY AUTOINCREMENT,
+    CodMural INTEGER NOT NULL,
+    Coordenadas TEXT NOT NULL,
+    Cor VARCHAR(7) NOT NULL DEFAULT '#ef4444',
+    Espessura DECIMAL NOT NULL DEFAULT 4,
+    FOREIGN KEY (CodMural) REFERENCES Mural(CodMural) ON DELETE CASCADE
+);
